@@ -1,0 +1,26 @@
+node_modules/
+
+# Build outputs
+build/
+dist/
+dist_electron/
+
+# Android generated files
+.gradle/
+android/.gradle/
+android/build/
+android/app/build/
+
+# Coverage
+coverage/
+
+# Logs
+*.log
+
+# Environment / secrets
+.env*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db

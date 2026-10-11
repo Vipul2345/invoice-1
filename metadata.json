@@ -1,0 +1,6 @@
+{
+  "name": "InvoiceFlow",
+  "description": "Fast, offline-first invoice generator for freelancers and small businesses. Create, customize, and export professional invoices with local-first storage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
