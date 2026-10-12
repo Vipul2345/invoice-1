@@ -16,6 +16,7 @@ import { LegalDocumentViewer, LegalDocType } from './LegalDocumentViewer';
 import { HelpFaqSection } from './HelpFaqSection';
 import { ContactSupportSection, ContactCategory } from './ContactSupportSection';
 import { DataAndBackupSection } from './DataAndBackupSection';
+import { LogoUploader } from './LogoUploader';
 import {
   Building,
   Globe,
@@ -92,6 +93,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
 
   // Business Profile Form States
+  const [bLogoUrl, setBLogoUrl] = useState<string | undefined>(business.logoUrl);
   const [bName, setBName] = useState(business.name);
   const [bAddress, setBAddress] = useState(business.address);
   const [bEmail, setBEmail] = useState(business.email);
@@ -124,6 +126,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSavedNotice(null), 3000);
   };
 
+  const handleLogoChange = (newLogoUrl: string | undefined) => {
+    setBLogoUrl(newLogoUrl);
+    const updated: BusinessProfile = {
+      name: bName.trim(),
+      address: bAddress.trim(),
+      email: bEmail.trim(),
+      phone: bPhone.trim(),
+      taxId: bTaxId.trim(),
+      website: bWebsite.trim(),
+      logoUrl: newLogoUrl,
+      bankDetails: {
+        bankName: bankName.trim(),
+        accountNumber: accountNumber.trim(),
+        routingCode: routingCode.trim(),
+        upiId: upiId.trim(),
+        instructions: instructions.trim(),
+      },
+    };
+    saveBusinessProfile(updated);
+    onBusinessUpdated(updated);
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     const updated: BusinessProfile = {
@@ -133,6 +157,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       phone: bPhone.trim(),
       taxId: bTaxId.trim(),
       website: bWebsite.trim(),
+      logoUrl: bLogoUrl,
       bankDetails: {
         bankName: bankName.trim(),
         accountNumber: accountNumber.trim(),
@@ -319,8 +344,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Business Profile
                 </h3>
                 <p className="text-neutral-500 mt-0.5">
-                  Your business name and address will appear on generated invoices.
+                  Your business name, logo, and address will appear on generated invoices.
                 </p>
+              </div>
+
+              {/* Company Logo Upload & Preview */}
+              <div>
+                <label className="block font-medium text-neutral-700 mb-1.5">
+                  Company Logo
+                </label>
+                <LogoUploader logoUrl={bLogoUrl} onLogoChange={handleLogoChange} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

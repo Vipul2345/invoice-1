@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { AppSettings, PlanTier } from '../types';
+import { AppSettings, PlanTier, ExportDataPayload } from '../types';
 import {
   exportBackupFile,
   importBackupPayload,
   clearAllLocalData,
-  mockConnectDrive,
-  mockDisconnectDrive,
-  mockTriggerDriveBackup,
 } from '../lib/storage';
+import { useAuth } from '../context/AuthContext';
 import {
   HardDrive,
   Cloud,
@@ -21,6 +19,8 @@ import {
   FileCheck,
   X,
   ExternalLink,
+  Clock,
+  LogIn,
 } from 'lucide-react';
 
 interface DataAndBackupSectionProps {
@@ -29,6 +29,7 @@ interface DataAndBackupSectionProps {
   onSettingsUpdated: (updated: AppSettings) => void;
   onDataResetOrCleared: () => void;
   onLearnMoreLegal?: () => void;
+  onRequestAuth?: () => void;
 }
 
 export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
@@ -37,13 +38,15 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
   onSettingsUpdated,
   onDataResetOrCleared,
   onLearnMoreLegal,
+  onRequestAuth,
 }) => {
+  const { currentUser } = useAuth();
   const [exportNotice, setExportNotice] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
 
-  // Drive Modal state
-  const [showDriveModal, setShowDriveModal] = useState(false);
-  const [driveEmail, setDriveEmail] = useState('user@gmail.com');
+  // Import preview modal state
+  const [importCandidate, setImportCandidate] = useState<ExportDataPayload | null>(null);
+  const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
 
   // Danger Zone Clear Data Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -63,20 +66,35 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        const ok = importBackupPayload(json);
-        if (ok) {
-          setImportNotice('Backup successfully restored from JSON file.');
-          onDataResetOrCleared();
-          setTimeout(() => setImportNotice(null), 4000);
-        } else {
-          alert('Invalid InvoiceFlow backup file. Could not restore.');
+        if (!json.business || !json.invoices || !json.settings) {
+          alert('Invalid InvoiceFlow backup file. Missing required schema keys.');
+          return;
         }
+        // Show validation & confirmation dialog first
+        setImportCandidate(json);
       } catch (err) {
-        alert('Could not parse the selected JSON file.');
+        alert('Could not parse the selected JSON file. Please ensure it is valid JSON.');
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleConfirmImport = () => {
+    if (!importCandidate) return;
+    const ok = importBackupPayload(importCandidate);
+    if (ok) {
+      setImportNotice(
+        `Backup successfully restored (${importCandidate.invoices?.length || 0} invoices, ${
+          importCandidate.customers?.length || 0
+        } customers).`
+      );
+      setImportCandidate(null);
+      onDataResetOrCleared();
+      setTimeout(() => setImportNotice(null), 5000);
+    } else {
+      alert('Could not complete restore. Validation failed.');
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -85,44 +103,6 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
     setShowDeleteModal(false);
     setDeleteConfirmationWord('');
     onDataResetOrCleared();
-  };
-
-  const handleMockConnectDrive = () => {
-    mockConnectDrive(driveEmail);
-    setShowDriveModal(false);
-    onSettingsUpdated({
-      ...settings,
-      driveSync: {
-        isConnected: true,
-        email: driveEmail,
-        lastBackupAt: 'Just now',
-        autoSync: true,
-      },
-    });
-  };
-
-  const handleMockDisconnectDrive = () => {
-    mockDisconnectDrive();
-    onSettingsUpdated({
-      ...settings,
-      driveSync: {
-        isConnected: false,
-        email: undefined,
-        lastBackupAt: undefined,
-        autoSync: false,
-      },
-    });
-  };
-
-  const handleMockBackupNow = () => {
-    mockTriggerDriveBackup();
-    onSettingsUpdated({
-      ...settings,
-      driveSync: {
-        ...settings.driveSync,
-        lastBackupAt: 'Just now (' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')',
-      },
-    });
   };
 
   return (
@@ -143,14 +123,14 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
           <div>
             <span className="font-bold block text-sm">Backup Created Successfully!</span>
             <span>
-              Your structured JSON backup file has been generated and saved to your device's downloads folder. You can store this in your personal archives or import it onto any other computer or mobile device.
+              Your structured JSON backup file has been generated and saved to your device. You can store this in your personal archives or import it onto any other computer or phone.
             </span>
           </div>
         </div>
       )}
 
       {importNotice && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span className="font-semibold">{importNotice}</span>
         </div>
@@ -179,7 +159,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
             </div>
 
             <p className="text-xs text-neutral-600 leading-relaxed">
-              Your invoices are stored locally on your device. No mandatory cloud account is required.
+              Your invoices are stored locally on your device. Works completely offline. No mandatory cloud account is required.
             </p>
           </div>
 
@@ -195,13 +175,13 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
             <div className="font-mono text-xs text-neutral-800 bg-blue-50/40 p-3 rounded-xl border border-blue-100 space-y-1">
               <div className="font-bold text-neutral-950">User's Device</div>
               <div className="text-neutral-400">↓</div>
-              <div className="font-semibold text-neutral-900">InvoiceFlow Local</div>
+              <div className="font-semibold text-neutral-900">Local JSON Payload</div>
               <div className="text-neutral-400">↓ (User Authorization)</div>
               <div className="font-bold text-blue-700">User's Google Drive</div>
             </div>
 
             <p className="text-xs text-neutral-600 leading-relaxed">
-              Google Drive backup allows you to keep an encrypted backup of your InvoiceFlow data in your own Google Drive account.
+              Google Drive backup allows you to store an encrypted backup of your structured JSON in your own Google Drive.
             </p>
           </div>
 
@@ -210,18 +190,18 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-amber-900">PRO CLOUD</span>
               <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 px-2 py-0.5 rounded">
-                Coming with Pro
+                Cloud Sync
               </span>
             </div>
 
             <div className="font-mono text-xs text-neutral-800 bg-amber-50/30 p-3 rounded-xl border border-amber-100 space-y-1">
-              <div className="font-bold text-neutral-950">User's Device</div>
-              <div className="text-neutral-400">↓ (Cloud Sync)</div>
-              <div className="font-bold text-amber-700">InvoiceFlow Cloud</div>
+              <div className="font-bold text-neutral-950">Authenticated User</div>
+              <div className="text-neutral-400">↓ (Zero-Trust ABAC)</div>
+              <div className="font-bold text-amber-700">Firestore Cloud Sync</div>
             </div>
 
             <p className="text-xs text-neutral-600 leading-relaxed">
-              Future managed cloud synchronization across multi-platform desktop and mobile clients. Clearly marked as upcoming.
+              Cloud synchronization across desktop and mobile clients with secure rules scoped strictly to user UID.
             </p>
           </div>
         </div>
@@ -236,10 +216,10 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
               Important: Free Plan Local Data Responsibility
             </h3>
             <p className="text-xs text-amber-900 leading-relaxed">
-              InvoiceFlow Free is designed to work without a mandatory account or cloud storage. Invoice and related application data are stored locally on your device. If your device is lost, damaged, reset, replaced, or its application data is deleted, locally stored data may become unavailable.
+              InvoiceFlow Free is designed to work without a mandatory account or cloud storage. Invoice and customer data are stored locally on your device. If your device is reset or browser storage cleared, local data could be lost.
             </p>
             <p className="text-xs font-medium text-amber-950 pt-1">
-              Recommendation: Regularly export your structured JSON backup to protect against unexpected hardware or storage loss.
+              Recommendation: Regularly export your structured JSON backup to keep your business records safe.
             </p>
           </div>
         </div>
@@ -269,7 +249,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
             Structured Data Portability
           </h3>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Structured JSON is the single authoritative source of truth for InvoiceFlow. PDFs are rendered dynamically on demand.
+            Structured JSON is the authoritative source of truth for InvoiceFlow. PDFs are rendered dynamically on demand.
           </p>
         </div>
 
@@ -281,7 +261,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
                 Export Data (JSON)
               </div>
               <p className="text-xs text-neutral-600 leading-relaxed">
-                Produces a standardized, unencrypted .json archive of your business profile, clients, line items, numbering sequences, and past invoices.
+                Produces a standardized .json archive containing your business profile, customers, line items, numbering sequence, and past invoices.
               </p>
             </div>
             <div>
@@ -302,7 +282,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
                 Import / Restore (JSON)
               </div>
               <p className="text-xs text-neutral-600 leading-relaxed">
-                Restores an existing InvoiceFlow backup. Replaces current workspace records with the contents of the chosen JSON file.
+                Inspects and restores an existing InvoiceFlow backup. Validates the JSON schema before applying changes.
               </p>
             </div>
             <div>
@@ -320,7 +300,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
         </div>
       </div>
 
-      {/* Google Drive Mock Section */}
+      {/* Google Drive Status Section */}
       <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -330,226 +310,132 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
                 Google Drive Backup (Drive Plan)
               </h3>
               <p className="text-xs text-neutral-500">
-                Synchronizes backup archives to your personal Google Drive application folder.
+                Direct integration with your personal Google Drive account.
               </p>
             </div>
           </div>
 
           <div>
-            {settings.driveSync.isConnected ? (
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
-                Connected
-              </span>
-            ) : (
-              <span className="text-[11px] font-medium text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-md">
-                Not connected
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">
+              <Clock className="w-3 h-3 text-amber-600" /> Coming Soon
+            </span>
           </div>
         </div>
 
-        {settings.driveSync.isConnected ? (
-          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-3 text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <span className="text-neutral-500">Account:</span>{' '}
-                <span className="font-mono font-bold text-neutral-900">{settings.driveSync.email}</span>
-              </div>
-              <div>
-                <span className="text-neutral-500">Last backup:</span>{' '}
-                <span className="font-semibold text-neutral-800">{settings.driveSync.lastBackupAt || 'Today, 10:42 AM'}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-neutral-200">
-              <button
-                onClick={handleMockBackupNow}
-                className="px-3.5 py-1.5 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
-              >
-                Backup Now
-              </button>
-              <button
-                onClick={() => alert('Data verified against Google Drive backup snapshot.')}
-                className="px-3.5 py-1.5 text-xs font-semibold text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded-lg transition-colors cursor-pointer"
-              >
-                Verify & Restore
-              </button>
-              <button
-                onClick={handleMockDisconnectDrive}
-                className="px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-              >
-                Disconnect Drive
-              </button>
-            </div>
+        <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-2 text-xs">
+          <p className="text-neutral-700">
+            <strong>Architecture Status:</strong> Google Drive backup requires an OAuth consent client and Google Drive AppData scope to safely write JSON files to the user's personal drive without reading unrelated files.
+          </p>
+          <div className="text-neutral-500 text-[11px] flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-neutral-400" />
+            <span>Blocked by external configuration: Google OAuth Client & Drive API scope approval.</span>
           </div>
-        ) : (
-          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-xs text-neutral-600 max-w-md">
-              Google Drive access requires explicit authorization and stores data inside your personal cloud storage.
-            </p>
-            <button
-              onClick={() => setShowDriveModal(true)}
-              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition-colors shrink-0 cursor-pointer"
-            >
-              Connect Google Drive
-            </button>
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* Enhanced Danger Zone */}
-      <div className="bg-white p-6 rounded-2xl border border-rose-200 shadow-2xs space-y-4">
-        <div className="flex items-center gap-2 text-rose-700">
-          <ShieldAlert className="w-5 h-5 text-rose-600" />
-          <h3 className="text-sm font-bold uppercase tracking-wider">
-            Danger Zone · Delete Local Data
-          </h3>
+      {/* Danger Zone: Clear Local Data */}
+      <div className="border border-rose-200 bg-rose-50/40 p-6 rounded-2xl space-y-3">
+        <div className="flex items-center gap-2 text-rose-800">
+          <AlertTriangle className="w-4 h-4 text-rose-600" />
+          <h3 className="text-xs font-bold uppercase tracking-wider">Danger Zone</h3>
         </div>
-
-        <p className="text-xs text-neutral-600 leading-relaxed">
-          Permanently purges all locally stored records from this device's browser memory, including:
+        <p className="text-xs text-neutral-600">
+          Clear all locally stored invoices, customer records, and custom templates on this device.
         </p>
-
-        <ul className="text-xs text-neutral-700 list-disc list-inside space-y-0.5">
-          <li>All saved invoice history and drafts</li>
-          <li>Customer contacts and directory records</li>
-          <li>Business profile information and bank details</li>
-          <li>Custom invoice styling templates and numbering preferences</li>
-        </ul>
-
-        <div className="pt-2 flex items-center justify-between">
-          <span className="text-[11px] text-neutral-500">
-            This action cannot be undone unless you possess an exported backup.
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowDeleteModal(true)}
-            className="px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-          >
-            Clear All Local Data
-          </button>
-        </div>
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="px-4 py-2 text-xs font-bold text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 rounded-lg shadow-2xs transition-colors cursor-pointer"
+        >
+          Reset Local Database
+        </button>
       </div>
 
-      {/* Google Drive Mock Modal */}
-      {showDriveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-neutral-200 text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-              <h3 className="font-bold text-neutral-900 text-sm flex items-center gap-2">
-                <Cloud className="w-4 h-4 text-blue-600" />
-                Connect Google Drive
-              </h3>
-              <button
-                onClick={() => setShowDriveModal(false)}
-                className="text-neutral-400 hover:text-neutral-700 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-neutral-600 mt-3 leading-relaxed">
-              InvoiceFlow will request permission to create and maintain encrypted backup archives in an isolated application folder in your Google Drive.
+      {/* Import Confirmation Preview Modal */}
+      {importCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200">
+            <h3 className="text-base font-bold text-neutral-900 mb-2">
+              Preview & Confirm Backup Import
+            </h3>
+            <p className="text-xs text-neutral-600 mb-4">
+              We validated your backup JSON file. Review the records to be restored:
             </p>
 
-            <div className="mt-4">
-              <label className="block font-medium text-neutral-700 mb-1">
-                Google Account Email
-              </label>
-              <input
-                type="email"
-                value={driveEmail}
-                onChange={(e) => setDriveEmail(e.target.value)}
-                className="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-neutral-900"
-              />
+            <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200 text-xs space-y-1.5 mb-4">
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Business Name:</span>
+                <span className="font-semibold text-neutral-900">{importCandidate.business?.name || 'Unknown'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Invoices Count:</span>
+                <span className="font-semibold text-neutral-900">{importCandidate.invoices?.length || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Customers Count:</span>
+                <span className="font-semibold text-neutral-900">{importCandidate.customers?.length || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Exported At:</span>
+                <span className="font-semibold text-neutral-900">{importCandidate.exportedAt ? new Date(importCandidate.exportedAt).toLocaleDateString() : 'N/A'}</span>
+              </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-2">
               <button
-                type="button"
-                onClick={() => setShowDriveModal(false)}
-                className="px-3 py-1.5 text-neutral-600 hover:text-neutral-900 font-medium cursor-pointer"
+                onClick={() => setImportCandidate(null)}
+                className="px-4 py-2 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={handleMockConnectDrive}
-                className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                onClick={handleConfirmImport}
+                className="px-4 py-2 text-xs font-bold text-white bg-neutral-950 hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
               >
-                Authorize & Connect
+                Confirm & Restore
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Explicit Confirmation Delete Modal */}
+      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 text-xs animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-3 text-rose-700 mb-3">
-              <div className="p-2.5 bg-rose-100 rounded-xl">
-                <AlertTriangle className="w-6 h-6 text-rose-600" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-neutral-950">
-                  Delete All Local Data?
-                </h3>
-                <span className="text-[11px] text-rose-700 font-semibold">
-                  This action is permanent and cannot be undone.
-                </span>
-              </div>
-            </div>
-
-            <p className="text-neutral-600 leading-relaxed my-3">
-              All invoices, client records, custom templates, and business configuration stored in this browser will be wiped.
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-rose-200">
+            <h3 className="text-base font-bold text-rose-900 mb-2">
+              Are you absolutely sure?
+            </h3>
+            <p className="text-xs text-neutral-600 mb-4 leading-relaxed">
+              This will permanently erase all local invoice records, customer details, and configurations from your browser storage.
             </p>
-
-            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-neutral-700 mb-4 space-y-1">
-              <span className="font-bold text-neutral-900 block">Safety Recommendation:</span>
-              <span>Export a JSON backup before proceeding to preserve a recoverable copy of your records.</span>
-            </div>
-
             <div className="mb-4">
-              <label className="block text-neutral-700 font-medium mb-1">
-                Type <strong className="font-mono text-rose-700">DELETE</strong> to confirm:
+              <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                Type <strong>DELETE</strong> to confirm:
               </label>
               <input
                 type="text"
                 value={deleteConfirmationWord}
                 onChange={(e) => setDeleteConfirmationWord(e.target.value)}
                 placeholder="DELETE"
-                className="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2 font-mono text-neutral-900 font-bold uppercase tracking-wider"
+                className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
               />
             </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-neutral-100">
+            <div className="flex justify-end gap-2">
               <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 font-semibold text-neutral-700 hover:bg-neutral-100 rounded-lg cursor-pointer"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmationWord('');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={handleExport}
-                className="px-4 py-2 font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors cursor-pointer"
-              >
-                Export Backup First
-              </button>
-              <button
-                type="button"
-                disabled={deleteConfirmationWord.toUpperCase() !== 'DELETE'}
                 onClick={handleConfirmDelete}
-                className={`px-4 py-2 font-bold rounded-lg shadow-2xs transition-colors cursor-pointer ${
-                  deleteConfirmationWord.toUpperCase() === 'DELETE'
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                }`}
+                disabled={deleteConfirmationWord.toUpperCase() !== 'DELETE'}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl disabled:opacity-50"
               >
-                Delete Data
+                Permanently Clear
               </button>
             </div>
           </div>

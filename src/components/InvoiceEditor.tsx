@@ -384,15 +384,22 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 Saved in Profile
               </span>
             </div>
-            <div className="text-xs space-y-1 text-neutral-600 bg-neutral-50 p-3 rounded-lg border border-neutral-100">
-              <div className="font-bold text-neutral-900 text-sm">{business.name || 'Your Business Name'}</div>
-              <div className="whitespace-pre-line text-neutral-600">{business.address || 'No address set'}</div>
-              <div>{business.email} {business.phone ? `· ${business.phone}` : ''}</div>
-              {business.taxId && (
-                <div className="font-medium text-neutral-800 pt-0.5">
-                  {countryConfig.taxIdLabel}: {business.taxId}
+            <div className="text-xs text-neutral-600 bg-neutral-50 p-3 rounded-lg border border-neutral-100 flex items-start gap-3">
+              {business.logoUrl && (
+                <div className="w-11 h-11 bg-white rounded-md border border-neutral-200 p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                  <img src={business.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
                 </div>
               )}
+              <div className="space-y-1 flex-1 min-w-0">
+                <div className="font-bold text-neutral-900 text-sm">{business.name || 'Your Business Name'}</div>
+                <div className="whitespace-pre-line text-neutral-600">{business.address || 'No address set'}</div>
+                <div>{business.email} {business.phone ? `· ${business.phone}` : ''}</div>
+                {business.taxId && (
+                  <div className="font-medium text-neutral-800 pt-0.5">
+                    {countryConfig.taxIdLabel}: {business.taxId}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

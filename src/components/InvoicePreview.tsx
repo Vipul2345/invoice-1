@@ -1,8 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Invoice, InvoiceTemplate, PlanTier, BusinessProfile } from '../types';
 import { COUNTRIES } from '../lib/constants';
 import { formatCurrency } from '../lib/storage';
-import { Printer, Download, Share2, Edit3, Copy, CheckCircle2, Clock, AlertTriangle, FileText, ArrowLeft } from 'lucide-react';
+import { downloadInvoicePdf } from '../lib/pdfGenerator';
+import {
+  Printer,
+  Download,
+  Share2,
+  Edit3,
+  Copy,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  FileText,
+  ArrowLeft,
+  Loader2,
+  Check,
+} from 'lucide-react';
 
 interface InvoicePreviewProps {
   invoice: Invoice;
@@ -31,12 +45,50 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
 }) => {
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
+  const [pdfStatus, setPdfStatus] = React.useState<string>('');
+  const [downloadSuccess, setDownloadSuccess] = React.useState(false);
 
   const countryConfig = COUNTRIES[invoice.country] || COUNTRIES.OTHER;
   const isIndia = invoice.country === 'IN';
   const showWatermark = plan !== 'pro';
 
+  const handleDownloadPdf = async () => {
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    setPdfStatus('Generating PDF...');
+    try {
+      const result = await downloadInvoicePdf({
+        invoice,
+        elementId: 'invoice-document',
+        onProgress: (status) => setPdfStatus(status),
+      });
+
+      if (result.success) {
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 3000);
+      } else {
+        alert(`Could not generate PDF: ${result.error || 'Please try again'}`);
+      }
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      alert('Unable to generate PDF. Please ensure browser permissions are allowed.');
+    } finally {
+      setIsGeneratingPdf(false);
+      setPdfStatus('');
+    }
+  };
+
   const handlePrint = () => {
+    // In Capacitor Android WebView, window.print() is unsupported by default.
+    // Instead, route directly to the native PDF generator which triggers the Android print/save sheet.
+    if (
+      typeof (window as any).Capacitor !== 'undefined' &&
+      (window as any).Capacitor.isNativePlatform?.()
+    ) {
+      handleDownloadPdf();
+      return;
+    }
     window.print();
   };
 
@@ -90,6 +142,30 @@ View or pay according to invoice instructions.`;
       : template.config.font === 'mono'
       ? 'font-mono'
       : 'font-sans';
+
+  const shouldShowLogo = template.config.showLogo !== false && !!business.logoUrl;
+  const logoPosition = template.config.logoPosition || 'left';
+  const logoSize = template.config.logoSize || 'medium';
+  const logoSizeClass =
+    logoSize === 'small'
+      ? 'max-h-11 max-w-[140px]'
+      : logoSize === 'large'
+      ? 'max-h-24 max-w-[280px]'
+      : 'max-h-16 max-w-[200px]';
+
+  const renderLogo = (alignment: 'left' | 'center' | 'right') => {
+    if (!shouldShowLogo) return null;
+    return (
+      <div className={`mb-3 flex ${alignment === 'center' ? 'justify-center' : alignment === 'right' ? 'justify-start sm:justify-end' : 'justify-start'}`}>
+        <img
+          src={business.logoUrl}
+          alt={business.name || 'Company Logo'}
+          className={`${logoSizeClass} object-contain rounded-xs`}
+          crossOrigin="anonymous"
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="w-full">
@@ -183,51 +259,122 @@ View or pay according to invoice instructions.`;
 
           <button
             onClick={() => setShowShareModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5" />
             Share
           </button>
 
           <button
+            onClick={handleDownloadPdf}
+            disabled={isGeneratingPdf}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-75"
+            title="Generate and download A4 PDF"
+          >
+            {isGeneratingPdf ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : downloadSuccess ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+            {isGeneratingPdf ? (pdfStatus || 'Generating...') : downloadSuccess ? 'PDF Ready!' : 'Download PDF'}
+          </button>
+
+          <button
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg shadow-sm transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors cursor-pointer"
+            title="Print invoice"
           >
             <Printer className="w-3.5 h-3.5" />
-            Print / Save PDF
+            Print
           </button>
         </div>
+      </div>
+
+      {/* Mobile Sticky Action Bar for Android & Mobile Web */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-neutral-200 p-3 flex items-center justify-between gap-2 shadow-lg no-print">
+        <button
+          onClick={() => setShowShareModal(true)}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-neutral-700 bg-neutral-100 active:bg-neutral-200 rounded-xl transition-colors"
+        >
+          <Share2 className="w-4 h-4" />
+          Share
+        </button>
+        <button
+          onClick={handleDownloadPdf}
+          disabled={isGeneratingPdf}
+          className="flex-2 inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-bold text-white bg-neutral-950 active:bg-neutral-800 rounded-xl shadow-md transition-colors disabled:opacity-70"
+        >
+          {isGeneratingPdf ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : downloadSuccess ? (
+            <Check className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          {isGeneratingPdf ? (pdfStatus || 'Generating...') : downloadSuccess ? 'PDF Ready!' : 'Download PDF'}
+        </button>
       </div>
 
       {/* Share Modal */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 no-print">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-neutral-200">
-            <h3 className="text-base font-bold text-neutral-900">Share Invoice</h3>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200">
+            <h3 className="text-base font-bold text-neutral-900">Share or Save Invoice</h3>
             <p className="text-xs text-neutral-500 mt-1">
-              Copy the invoice summary or send directly to {invoice.customerSnapshot.name}.
+              Download the PDF document or copy a message summary for {invoice.customerSnapshot.name}.
             </p>
 
-            <div className="mt-4 bg-neutral-50 p-3 rounded-lg border border-neutral-200 font-mono text-xs text-neutral-700 space-y-1">
-              <div>Invoice: {invoice.invoiceNumber}</div>
-              <div>Customer: {invoice.customerSnapshot.name} ({invoice.customerSnapshot.company})</div>
-              <div>Amount: {formatCurrency(invoice.grandTotal, invoice.currency, invoice.currencySymbol)}</div>
-              <div>Due: {invoice.dueDate}</div>
+            <div className="mt-4 bg-neutral-50 p-3.5 rounded-xl border border-neutral-200 font-mono text-xs text-neutral-700 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-neutral-500 font-sans">Invoice:</span>
+                <span className="font-bold">{invoice.invoiceNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500 font-sans">Client:</span>
+                <span>{invoice.customerSnapshot.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500 font-sans">Amount:</span>
+                <span className="font-bold text-emerald-700">
+                  {formatCurrency(invoice.grandTotal, invoice.currency, invoice.currencySymbol)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500 font-sans">Due:</span>
+                <span>{invoice.dueDate}</span>
+              </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2">
+            <div className="mt-5 space-y-2">
               <button
-                onClick={() => setShowShareModal(false)}
-                className="px-3 py-2 text-xs font-medium text-neutral-600 hover:text-neutral-900"
+                onClick={() => {
+                  setShowShareModal(false);
+                  handleDownloadPdf();
+                }}
+                disabled={isGeneratingPdf}
+                className="w-full py-2.5 px-4 text-xs font-bold text-white bg-neutral-950 hover:bg-neutral-800 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
-                Close
+                <Download className="w-4 h-4" />
+                Download / Share PDF File
               </button>
+
               <button
                 onClick={handleCopySummary}
-                className="px-4 py-2 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1.5"
+                className="w-full py-2.5 px-4 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
-                {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied to Clipboard!' : 'Copy Summary'}
+                {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Summary Copied to Clipboard!' : 'Copy Text Summary'}
+              </button>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-neutral-100 flex justify-end">
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="px-4 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900 cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>
@@ -244,8 +391,10 @@ View or pay according to invoice instructions.`;
           {/* Header Layout Variations */}
           {template.style === 'modern' || template.config.headerLayout === 'split' ? (
             <div className="border-b border-neutral-200 pb-8 mb-8">
+              {logoPosition === 'center' && renderLogo('center')}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
                 <div>
+                  {logoPosition === 'left' && renderLogo('left')}
                   <div
                     className="inline-block px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-md text-white mb-3"
                     style={{ backgroundColor: primaryColor }}
@@ -270,6 +419,7 @@ View or pay according to invoice instructions.`;
                 </div>
 
                 <div className="sm:text-right">
+                  {logoPosition === 'right' && renderLogo('right')}
                   <div className="text-sm font-semibold uppercase tracking-wider text-neutral-500">
                     Invoice Number
                   </div>
@@ -296,45 +446,50 @@ View or pay according to invoice instructions.`;
             </div>
           ) : (
             /* Standard / Minimal / Corporate Header */
-            <div className="flex flex-col sm:flex-row justify-between items-start border-b border-neutral-200 pb-8 mb-8 gap-6">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950">
-                  {business.name || 'Your Business Name'}
-                </h1>
-                <div className="mt-2 text-xs text-neutral-600 leading-relaxed whitespace-pre-line">
-                  {business.address}
-                </div>
-                <div className="mt-1 text-xs text-neutral-600">
-                  {business.email && <span>{business.email} · </span>}
-                  {business.phone && <span>{business.phone}</span>}
-                </div>
-                {business.taxId && (
-                  <div className="mt-1 text-xs font-semibold text-neutral-700">
-                    {countryConfig.taxIdLabel}: {business.taxId}
+            <div className="border-b border-neutral-200 pb-8 mb-8">
+              {logoPosition === 'center' && renderLogo('center')}
+              <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
+                <div>
+                  {logoPosition === 'left' && renderLogo('left')}
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950">
+                    {business.name || 'Your Business Name'}
+                  </h1>
+                  <div className="mt-2 text-xs text-neutral-600 leading-relaxed whitespace-pre-line">
+                    {business.address}
                   </div>
-                )}
-              </div>
-
-              <div className="sm:text-right">
-                <div className="text-xl sm:text-2xl font-black uppercase tracking-wider text-neutral-900">
-                  INVOICE
-                </div>
-                <div className="text-sm font-mono font-bold text-neutral-700 mt-1">
-                  #{invoice.invoiceNumber}
+                  <div className="mt-1 text-xs text-neutral-600">
+                    {business.email && <span>{business.email} · </span>}
+                    {business.phone && <span>{business.phone}</span>}
+                  </div>
+                  {business.taxId && (
+                    <div className="mt-1 text-xs font-semibold text-neutral-700">
+                      {countryConfig.taxIdLabel}: {business.taxId}
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-4 space-y-1 text-xs">
-                  <div>
-                    <span className="text-neutral-500">Date:</span>{' '}
-                    <span className="font-medium text-neutral-900">{invoice.date}</span>
+                <div className="sm:text-right">
+                  {logoPosition === 'right' && renderLogo('right')}
+                  <div className="text-xl sm:text-2xl font-black uppercase tracking-wider text-neutral-900">
+                    INVOICE
                   </div>
-                  <div>
-                    <span className="text-neutral-500">Due Date:</span>{' '}
-                    <span className="font-medium text-neutral-900">{invoice.dueDate}</span>
+                  <div className="text-sm font-mono font-bold text-neutral-700 mt-1">
+                    #{invoice.invoiceNumber}
                   </div>
-                  <div>
-                    <span className="text-neutral-500">Terms:</span>{' '}
-                    <span className="font-medium text-neutral-900">{invoice.paymentTerms}</span>
+
+                  <div className="mt-4 space-y-1 text-xs">
+                    <div>
+                      <span className="text-neutral-500">Date:</span>{' '}
+                      <span className="font-medium text-neutral-900">{invoice.date}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500">Due Date:</span>{' '}
+                      <span className="font-medium text-neutral-900">{invoice.dueDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500">Terms:</span>{' '}
+                      <span className="font-medium text-neutral-900">{invoice.paymentTerms}</span>
+                    </div>
                   </div>
                 </div>
               </div>

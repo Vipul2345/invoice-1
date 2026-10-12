@@ -107,6 +107,8 @@ export interface TemplateConfig {
   secondaryColor?: string;
   font: 'sans' | 'mono' | 'serif';
   showLogo: boolean;
+  logoPosition?: 'left' | 'center' | 'right';
+  logoSize?: 'small' | 'medium' | 'large';
   showTaxBreakdown: boolean;
   showPaymentDetails: boolean;
   headerLayout: 'standard' | 'compact' | 'split';

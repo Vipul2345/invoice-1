@@ -339,7 +339,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <button
                           onClick={() => onViewInvoice(inv)}
                           className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors"
-                          title="Preview & Print"
+                          title="Preview, Download PDF & Print"
                         >
                           <Printer className="w-3.5 h-3.5" />
                         </button>

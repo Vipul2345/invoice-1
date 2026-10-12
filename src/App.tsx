@@ -41,10 +41,14 @@ import { SettingsView, SettingsTabId } from './components/SettingsView';
 import { OnboardingModal } from './components/OnboardingModal';
 import { BackupReminderBanner } from './components/BackupReminderBanner';
 import { LegalDocType } from './components/LegalDocumentViewer';
+import { AuthModal } from './components/AuthModal';
+import { useAuth } from './context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 
 export default function App() {
+  const { currentUser } = useAuth();
+
   // Navigation & View States
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>('profile');
@@ -59,8 +63,10 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(getSettings());
   const [templates, setTemplates] = useState<InvoiceTemplate[]>(getAllTemplates());
 
-  // Onboarding
+  // Onboarding & Auth Modals
   const [showOnboarding, setShowOnboarding] = useState<boolean>(!isOnboarded());
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authTargetPlan, setAuthTargetPlan] = useState<string | undefined>();
 
   // Reload data from local storage
   const reloadData = () => {
@@ -86,6 +92,10 @@ export default function App() {
     if (!Capacitor.isNativePlatform()) return;
 
     const backListenerPromise = CapacitorApp.addListener('backButton', () => {
+      if (authModalOpen) {
+        setAuthModalOpen(false);
+        return;
+      }
       if (showOnboarding) {
         setShowOnboarding(false);
         return;
@@ -112,7 +122,7 @@ export default function App() {
     return () => {
       backListenerPromise.then((handle) => handle.remove()).catch(() => {});
     };
-  }, [showOnboarding, activeInvoiceForPreview, isCreatingInvoice, currentTab]);
+  }, [authModalOpen, showOnboarding, activeInvoiceForPreview, isCreatingInvoice, currentTab]);
 
   // Handlers for Navigation & Invoice Workflow
   const handleStartCreateInvoice = () => {
@@ -242,13 +252,17 @@ export default function App() {
     }
   };
 
+  const handleRequestAuth = (plan?: PlanTier) => {
+    setAuthTargetPlan(plan);
+    setAuthModalOpen(true);
+  };
+
   // Active Template for Preview
   const activeTemplate =
     templates.find((t) => t.id === activeInvoiceForPreview?.templateId) ||
     templates.find((t) => t.id === settings.defaultTemplateId) ||
     templates[0];
 
-  // Dummy fallback invoice for templates playground
   const fallbackSampleInvoice: Invoice = invoices[0] || {
     id: 'sample-001',
     invoiceNumber: 'INV-SAMPLE',
@@ -259,51 +273,41 @@ export default function App() {
       company: 'Client Corp',
       email: 'client@example.com',
       phone: '+1 555-0100',
-      address: '100 Main St, City',
-      taxId: 'TAX-001',
-      createdAt: '2026-10-11',
+      address: '742 Evergreen Terrace',
+      taxId: 'US-TAX-8899',
+      createdAt: '2026-01-01',
     },
     date: '2026-10-11',
     dueDate: '2026-10-25',
     currency: settings.currency,
     currencySymbol: settings.currencySymbol,
-    paymentTerms: 'Net 14',
+    paymentTerms: 'Due in 14 days',
     items: [
       {
-        id: 's1',
-        description: 'Product Engineering & Design Services',
+        id: 'item-1',
+        description: 'Professional Web Design & Consulting',
         quantity: 1,
-        rate: 2400,
+        rate: 1500,
         taxPercent: 0,
-        discountPercent: 0,
-        amount: 2400,
+        amount: 1500,
       },
     ],
-    subtotal: 2400,
+    subtotal: 1500,
     totalDiscount: 0,
     totalTax: 0,
-    grandTotal: 2400,
+    grandTotal: 1500,
     notes: 'Thank you for your business.',
     paymentDetails: business.bankDetails,
-    status: 'paid',
-    templateId: 'minimal',
+    status: 'pending',
+    templateId: settings.defaultTemplateId,
     country: settings.country,
     createdAt: '2026-10-11',
     updatedAt: '2026-10-11',
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50/80 text-neutral-900 flex flex-col md:flex-row antialiased">
-      {/* Onboarding Dialog */}
-      {showOnboarding && (
-        <OnboardingModal
-          initialCountry={settings.country}
-          onStartFree={handleOnboardingStartFree}
-          onSeePlans={handleOnboardingSeePlans}
-        />
-      )}
-
-      {/* Navigation (Sidebar Desktop + Mobile Header/Nav) */}
+    <div className="min-h-screen bg-neutral-50/60 text-neutral-900 flex flex-col md:flex-row antialiased selection:bg-neutral-900 selection:text-white">
+      {/* Navigation */}
       <Navigation
         currentTab={currentTab}
         onTabChange={(tab) => {
@@ -311,9 +315,6 @@ export default function App() {
           setActiveInvoiceForEdit(null);
           setActiveInvoiceForPreview(null);
           setCurrentTab(tab);
-          if (tab === 'settings') {
-            setSettingsTab('profile');
-          }
         }}
         onCreateInvoice={handleStartCreateInvoice}
         currentPlan={settings.plan}
@@ -323,24 +324,36 @@ export default function App() {
           setActiveInvoiceForPreview(null);
           setCurrentTab('pricing');
         }}
+        onOpenAuthModal={() => handleRequestAuth()}
       />
 
-      {/* Main Viewport Content Area */}
-      <main className="flex-1 md:pl-64 w-full min-w-0 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {/* Subtle Local Storage Backup Warning for Free Users */}
-          {!activeInvoiceForPreview && !isCreatingInvoice && currentTab !== 'settings' && (
-            <BackupReminderBanner
-              plan={settings.plan}
-              onLearnMore={() => {
-                setCurrentTab('settings');
-                setSettingsTab('data_backup');
-              }}
-            />
-          )}
+      {/* Main Content Area */}
+      <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-8 flex flex-col">
+        {/* Backup Reminder Banner (Shows for Free users) */}
+        {!isCreatingInvoice && !activeInvoiceForPreview && (
+          <BackupReminderBanner
+            plan={settings.plan}
+            onLearnMore={() => {
+              setCurrentTab('settings');
+              setSettingsTab('data_backup');
+            }}
+          />
+        )}
 
-          {/* Active Invoice Preview Modal / Full View */}
-          {activeInvoiceForPreview ? (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto flex-1">
+          {/* Active Flow: Invoice Editor */}
+          {isCreatingInvoice ? (
+            <InvoiceEditor
+              initialInvoice={activeInvoiceForEdit || undefined}
+              customers={customers}
+              business={business}
+              settings={settings}
+              onSave={handleSaveInvoice}
+              onCancel={handleCancelEditor}
+              onCustomerCreated={reloadData}
+            />
+          ) : activeInvoiceForPreview ? (
+            /* Active Flow: Fullscreen Invoice Preview & Print */
             <InvoicePreview
               invoice={activeInvoiceForPreview}
               business={business}
@@ -351,29 +364,15 @@ export default function App() {
               onDuplicate={() => handleDuplicateInvoice(activeInvoiceForPreview.id)}
               onStatusChange={handleStatusChangeOnPreview}
               onTemplateChange={handleTemplateChangeOnPreview}
-              availableTemplates={templates}
-            />
-          ) : isCreatingInvoice ? (
-            /* Invoice Builder / Editor */
-            <InvoiceEditor
-              initialInvoice={activeInvoiceForEdit || undefined}
-              business={business}
-              customers={customers}
-              settings={settings}
-              onSave={handleSaveInvoice}
-              onCancel={handleCancelEditor}
-              onCustomerCreated={(newCust) => {
-                setCustomers(getCustomers());
-              }}
             />
           ) : (
-            /* Standard Tab Views */
+            /* Normal Tabbed Views */
             <>
               {currentTab === 'dashboard' && (
                 <DashboardView
                   invoices={invoices}
-                  business={business}
                   settings={settings}
+                  business={business}
                   plan={settings.plan}
                   onCreateInvoice={handleStartCreateInvoice}
                   onViewInvoice={handleViewInvoice}
@@ -416,6 +415,7 @@ export default function App() {
                   onSelectDefaultTemplate={handleSelectDefaultTemplate}
                   onTemplatesUpdated={reloadData}
                   onGoToPricing={() => setCurrentTab('pricing')}
+                  onBusinessUpdated={(updated) => setBusiness(updated)}
                 />
               )}
 
@@ -430,6 +430,7 @@ export default function App() {
                   onSelectPlan={handlePlanChange}
                   onCountryChange={handleCountryChange}
                   onOpenLegalDoc={handleOpenLegalDocFromAnywhere}
+                  onRequestAuth={handleRequestAuth}
                 />
               )}
 
@@ -451,6 +452,25 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* Auth Modal for Email/Password and Google Sign-in */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        targetPlan={authTargetPlan}
+        onSuccess={() => {
+          reloadData();
+        }}
+      />
+
+      {/* First-time Onboarding Modal */}
+      {showOnboarding && (
+        <OnboardingModal
+          initialCountry={settings.country}
+          onStartFree={handleOnboardingStartFree}
+          onSeePlans={handleOnboardingSeePlans}
+        />
+      )}
     </div>
   );
 }

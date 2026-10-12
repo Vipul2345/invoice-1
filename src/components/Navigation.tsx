@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlanTier } from '../types';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   FileText,
@@ -12,7 +13,9 @@ import {
   HardDrive,
   Cloud,
   ChevronRight,
-  ExternalLink,
+  LogIn,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
 
 export type NavTab = 'dashboard' | 'invoices' | 'customers' | 'templates' | 'reports' | 'settings' | 'pricing';
@@ -23,6 +26,7 @@ interface NavigationProps {
   onCreateInvoice: () => void;
   currentPlan: PlanTier;
   onUpgradeClick: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -31,7 +35,10 @@ export const Navigation: React.FC<NavigationProps> = ({
   onCreateInvoice,
   currentPlan,
   onUpgradeClick,
+  onOpenAuthModal,
 }) => {
+  const { currentUser, logout } = useAuth();
+
   const navItems = [
     { id: 'dashboard' as NavTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'invoices' as NavTab, label: 'Invoices', icon: FileText },
@@ -59,7 +66,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       default:
         return (
           <span className="text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-200 px-2 py-0.5 rounded uppercase tracking-wider">
-            Free Plan
+            Free (Local)
           </span>
         );
     }
@@ -122,8 +129,37 @@ export const Navigation: React.FC<NavigationProps> = ({
           })}
         </nav>
 
-        {/* Bottom Plan & Storage Area */}
+        {/* Bottom User Profile & Plan Area */}
         <div className="p-4 border-t border-neutral-100 space-y-3 bg-neutral-50/50">
+          {/* Auth State Box */}
+          <div className="p-2.5 bg-white rounded-xl border border-neutral-200/80 shadow-2xs flex items-center justify-between text-xs">
+            {currentUser ? (
+              <div className="flex items-center justify-between w-full">
+                <div className="truncate max-w-[140px]">
+                  <span className="text-[10px] text-neutral-400 block">Signed in</span>
+                  <span className="font-semibold text-neutral-900 truncate block text-[11px]">
+                    {currentUser.displayName || currentUser.email}
+                  </span>
+                </div>
+                <button
+                  onClick={() => logout()}
+                  title="Sign out"
+                  className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onOpenAuthModal}
+                className="w-full flex items-center justify-center gap-1.5 py-1 text-xs font-bold text-neutral-800 hover:text-neutral-950 cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5 text-neutral-500" />
+                <span>Sign In / Register</span>
+              </button>
+            )}
+          </div>
+
           {/* Plan Card */}
           <div className="bg-white p-3 rounded-xl border border-neutral-200/80 shadow-2xs">
             <div className="flex items-center justify-between mb-1.5">
@@ -148,7 +184,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
       </aside>
 
-      {/* Mobile Top Header (Small Screens Only) */}
+      {/* Mobile Top Header */}
       <header className="no-print md:hidden bg-white border-b border-neutral-200 sticky top-0 z-30 px-4 py-3 flex items-center justify-between shadow-2xs">
         <button
           onClick={() => onTabChange('dashboard')}
@@ -163,23 +199,40 @@ export const Navigation: React.FC<NavigationProps> = ({
         </button>
 
         <div className="flex items-center gap-2">
+          {currentUser ? (
+            <button
+              onClick={() => logout()}
+              title="Sign out"
+              className="p-1.5 text-neutral-500 hover:text-neutral-900 rounded-md"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={onOpenAuthModal}
+              className="text-[11px] font-semibold text-neutral-700 bg-neutral-100 px-2 py-1 rounded-md"
+            >
+              Sign In
+            </button>
+          )}
+
           <button
             onClick={onUpgradeClick}
-            className="text-[11px] font-semibold text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded-md"
+            className="text-[11px] font-semibold text-neutral-600 bg-neutral-100 px-2 py-1 rounded-md"
           >
             {currentPlan.toUpperCase()}
           </button>
           <button
             onClick={onCreateInvoice}
-            className="px-3 py-1.5 text-xs font-bold text-white bg-neutral-950 rounded-lg flex items-center gap-1"
+            className="px-2.5 py-1 text-xs font-bold text-white bg-neutral-950 rounded-lg flex items-center gap-1"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Invoice</span>
+            <span>Invoice</span>
           </button>
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation Bar (Small Screens Only) */}
+      {/* Mobile Bottom Navigation Bar */}
       <nav className="no-print md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-neutral-200/90 z-30 px-2 py-1.5 flex items-center justify-around shadow-lg">
         {navItems.slice(0, 5).map((item) => {
           const Icon = item.icon;
@@ -197,7 +250,6 @@ export const Navigation: React.FC<NavigationProps> = ({
             </button>
           );
         })}
-        {/* Settings button on mobile */}
         <button
           onClick={() => onTabChange('settings')}
           className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${

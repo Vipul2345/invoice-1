@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { PlanTier, CountryCode } from '../types';
 import { COUNTRIES } from '../lib/constants';
-import { Check, Crown, Cloud, HardDrive, MapPin, Globe, Sparkles, ShieldCheck, ShieldAlert, FileText, RotateCcw, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Check, Crown, Cloud, HardDrive, MapPin, Globe, Sparkles, ShieldCheck, ShieldAlert, FileText, RotateCcw, AlertTriangle, Lock, Clock, LogIn } from 'lucide-react';
 import { LegalDocType } from './LegalDocumentViewer';
 
 interface PricingViewProps {
@@ -10,6 +11,7 @@ interface PricingViewProps {
   onSelectPlan: (plan: PlanTier) => void;
   onCountryChange?: (country: CountryCode) => void;
   onOpenLegalDoc?: (type: LegalDocType) => void;
+  onRequestAuth?: (plan: PlanTier) => void;
 }
 
 export const PricingView: React.FC<PricingViewProps> = ({
@@ -18,16 +20,35 @@ export const PricingView: React.FC<PricingViewProps> = ({
   onSelectPlan,
   onCountryChange,
   onOpenLegalDoc,
+  onRequestAuth,
 }) => {
-  const [justSwitched, setJustSwitched] = useState<string | null>(null);
+  const { currentUser } = useAuth();
+  const [selectedPlanNotice, setSelectedPlanNotice] = useState<string | null>(null);
 
   const isIndia = country === 'IN';
   const currentCountryConfig = COUNTRIES[country] || COUNTRIES.OTHER;
 
-  const handleSelect = (plan: PlanTier) => {
-    onSelectPlan(plan);
-    setJustSwitched(plan);
-    setTimeout(() => setJustSwitched(null), 3000);
+  const handleFreeSelect = () => {
+    onSelectPlan('free');
+    setSelectedPlanNotice('Free Plan active: 100% offline local storage.');
+    setTimeout(() => setSelectedPlanNotice(null), 4000);
+  };
+
+  const handlePaidSelect = (plan: 'drive' | 'pro') => {
+    if (!currentUser) {
+      if (onRequestAuth) {
+        onRequestAuth(plan);
+      } else {
+        alert('Please create an account or sign in to continue.');
+      }
+      return;
+    }
+
+    // User is authenticated, but payment infrastructure is coming soon
+    setSelectedPlanNotice(
+      `${plan === 'drive' ? 'Drive Backup' : 'Pro Cloud'} is in Early Access / Coming Soon. Real payment integration will be verified before activation.`
+    );
+    setTimeout(() => setSelectedPlanNotice(null), 5000);
   };
 
   return (
@@ -66,9 +87,10 @@ export const PricingView: React.FC<PricingViewProps> = ({
           )}
         </div>
 
-        {justSwitched && (
-          <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg inline-block font-semibold">
-            Switched to {justSwitched.toUpperCase()} plan for prototype testing!
+        {selectedPlanNotice && (
+          <div className="p-3 bg-neutral-900 text-white text-xs rounded-xl inline-flex items-center gap-2 font-medium shadow-md animate-in fade-in">
+            <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{selectedPlanNotice}</span>
           </div>
         )}
       </div>
@@ -98,7 +120,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               <div className="text-3xl font-extrabold font-mono text-neutral-950">
                 {isIndia ? '₹0' : '$0'}
               </div>
-              <div className="text-xs text-neutral-400 mt-0.5">Forever / No credit card</div>
+              <div className="text-xs text-neutral-400 mt-0.5">Forever / No account required</div>
             </div>
 
             <div className="space-y-2.5 text-xs text-neutral-700 pt-4 border-t border-neutral-100">
@@ -131,14 +153,14 @@ export const PricingView: React.FC<PricingViewProps> = ({
 
           <div className="mt-8">
             <button
-              onClick={() => handleSelect('free')}
-              className={`w-full py-2.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+              onClick={handleFreeSelect}
+              className={`w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer ${
                 currentPlan === 'free'
                   ? 'bg-neutral-100 text-neutral-900 cursor-default'
                   : 'bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-50'
               }`}
             >
-              {currentPlan === 'free' ? 'Current Plan' : 'Continue Free'}
+              {currentPlan === 'free' ? 'Current Active Plan' : 'Start Free (No Account)'}
             </button>
           </div>
         </div>
@@ -167,7 +189,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 {isIndia ? '₹49' : '$2.99'}
                 <span className="text-xs font-normal text-neutral-500">/mo</span>
               </div>
-              <div className="text-xs text-neutral-400 mt-0.5">Billed monthly</div>
+              <div className="text-xs text-neutral-400 mt-0.5">Authentication required</div>
             </div>
 
             <div className="space-y-2.5 text-xs text-neutral-700 pt-4 border-t border-neutral-100">
@@ -177,11 +199,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Google Drive backup & restore</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Automatic background backup</span>
+                <span>Google Drive backup destination</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -198,21 +216,30 @@ export const PricingView: React.FC<PricingViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-8 space-y-2">
             <button
-              onClick={() => handleSelect('drive')}
-              className={`w-full py-2.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                currentPlan === 'drive'
-                  ? 'bg-neutral-100 text-neutral-900 cursor-default'
-                  : 'bg-neutral-900 text-white hover:bg-neutral-800'
-              }`}
+              onClick={() => handlePaidSelect('drive')}
+              className="w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800 flex items-center justify-center gap-1.5"
             >
-              {currentPlan === 'drive' ? 'Current Plan' : 'Choose Drive'}
+              {currentUser ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Drive Backup (Coming Soon)</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign in to continue</span>
+                </>
+              )}
             </button>
+            <div className="text-[10px] text-center text-neutral-400">
+              {currentUser ? 'Logged in · Real billing integration in progress' : 'Requires authenticated account'}
+            </div>
           </div>
         </div>
 
-        {/* PRO CLOUD PLAN (Highlighted) */}
+        {/* PRO CLOUD PLAN */}
         <div
           className={`bg-white rounded-2xl border-2 p-6 flex flex-col justify-between shadow-md transition-all relative ${
             currentPlan === 'pro'
@@ -243,7 +270,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 {isIndia ? '₹99' : '$4.99'}
                 <span className="text-xs font-normal text-neutral-500">/mo</span>
               </div>
-              <div className="text-xs text-neutral-400 mt-0.5">Billed monthly</div>
+              <div className="text-xs text-neutral-400 mt-0.5">Authentication required</div>
             </div>
 
             <div className="space-y-2.5 text-xs text-neutral-700 pt-4 border-t border-neutral-100">
@@ -274,25 +301,36 @@ export const PricingView: React.FC<PricingViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-8 space-y-2">
             <button
-              onClick={() => handleSelect('pro')}
-              className={`w-full py-2.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                currentPlan === 'pro'
-                  ? 'bg-neutral-100 text-neutral-900 cursor-default'
-                  : 'bg-neutral-950 text-white hover:bg-neutral-800 shadow-sm'
-              }`}
+              onClick={() => handlePaidSelect('pro')}
+              className="w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer bg-neutral-950 text-white hover:bg-neutral-800 flex items-center justify-center gap-1.5 shadow-sm"
             >
-              {currentPlan === 'pro' ? 'Current Plan (Active)' : 'Choose Pro'}
+              {currentUser ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Pro Cloud (Coming Soon)</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign in to continue</span>
+                </>
+              )}
             </button>
+            <div className="text-[10px] text-center text-neutral-400">
+              {currentUser ? 'Logged in · Real billing integration in progress' : 'Requires authenticated account'}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Prototype Testing Notice */}
-      <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 text-center text-xs text-neutral-500 max-w-2xl mx-auto">
-        <span className="font-semibold text-neutral-700">Prototype Environment Notice:</span>{' '}
-        Pricing is tailored to your operating country ({isIndia ? 'India · ₹ INR' : 'Outside India · $ USD'}). Plan selection buttons simulate immediate feature tier activation for testing.
+      {/* Honest Transparency Notice */}
+      <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 text-center text-xs text-neutral-600 max-w-2xl mx-auto space-y-1">
+        <span className="font-bold text-neutral-800 block">Transparent Testing Architecture</span>
+        <p>
+          Free mode works 100% offline without registration. Drive & Pro tiers require account creation. Subscriptions will only activate when real payment gateways are connected.
+        </p>
       </div>
 
       {/* Legal Links Footer */}

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { InvoiceTemplate, PlanTier, TemplateConfig, BusinessProfile, Invoice } from '../types';
 import { DEFAULT_TEMPLATES } from '../lib/constants';
-import { saveCustomTemplate, deleteCustomTemplate } from '../lib/storage';
+import { saveCustomTemplate, deleteCustomTemplate, saveBusinessProfile } from '../lib/storage';
 import { InvoicePreview } from './InvoicePreview';
+import { LogoUploader } from './LogoUploader';
 import {
   LayoutTemplate,
   Crown,
@@ -13,6 +14,7 @@ import {
   Plus,
   Trash2,
   Lock,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface TemplatesViewProps {
@@ -24,6 +26,7 @@ interface TemplatesViewProps {
   onSelectDefaultTemplate: (templateId: string) => void;
   onTemplatesUpdated: () => void;
   onGoToPricing: () => void;
+  onBusinessUpdated?: (business: BusinessProfile) => void;
 }
 
 export const TemplatesView: React.FC<TemplatesViewProps> = ({
@@ -35,6 +38,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   onSelectDefaultTemplate,
   onTemplatesUpdated,
   onGoToPricing,
+  onBusinessUpdated,
 }) => {
   const isPro = currentPlan === 'pro';
   const [activeTab, setActiveTab] = useState<'gallery' | 'builder'>('gallery');
@@ -46,8 +50,19 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   const [headerLayout, setHeaderLayout] = useState<'standard' | 'split' | 'compact'>('split');
   const [tableStyle, setTableStyle] = useState<'clean' | 'striped' | 'bordered'>('clean');
   const [showLogo, setShowLogo] = useState(true);
+  const [logoPosition, setLogoPosition] = useState<'left' | 'center' | 'right'>('left');
+  const [logoSize, setLogoSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [showTaxBreakdown, setShowTaxBreakdown] = useState(true);
   const [showPaymentDetails, setShowPaymentDetails] = useState(true);
+
+  const handleLogoChange = (newLogoUrl: string | undefined) => {
+    const updated: BusinessProfile = {
+      ...business,
+      logoUrl: newLogoUrl,
+    };
+    saveBusinessProfile(updated);
+    onBusinessUpdated?.(updated);
+  };
 
   // Live preview template object
   const liveCustomTemplate: InvoiceTemplate = {
@@ -60,6 +75,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       primaryColor,
       font,
       showLogo,
+      logoPosition,
+      logoSize,
       showTaxBreakdown,
       showPaymentDetails,
       headerLayout,
@@ -79,6 +96,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
         primaryColor,
         font,
         showLogo,
+        logoPosition,
+        logoSize,
         showTaxBreakdown,
         showPaymentDetails,
         headerLayout,
@@ -309,6 +328,90 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                 placeholder="e.g. Acme Minimal Black"
                 className="w-full text-xs bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-neutral-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900"
               />
+            </div>
+
+            {/* Branding Section */}
+            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-neutral-600" />
+                  Branding & Logo
+                </span>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-700">
+                  <span>Show Logo:</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLogo(!showLogo)}
+                    className={`px-2 py-0.5 text-[11px] font-bold rounded transition-colors cursor-pointer ${
+                      showLogo ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-600'
+                    }`}
+                  >
+                    {showLogo ? 'ON' : 'OFF'}
+                  </button>
+                </label>
+              </div>
+
+              {/* Logo Upload/Replace/Remove */}
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-600 mb-1.5">
+                  Company Logo
+                </label>
+                <LogoUploader
+                  logoUrl={business.logoUrl}
+                  onLogoChange={handleLogoChange}
+                  compact={true}
+                />
+              </div>
+
+              {showLogo && (
+                <>
+                  {/* Logo Position */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-600 mb-1.5">
+                      Logo Position
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['left', 'center', 'right'] as const).map((pos) => (
+                        <button
+                          key={pos}
+                          type="button"
+                          onClick={() => setLogoPosition(pos)}
+                          className={`text-xs py-1.5 px-2 rounded-md border font-medium capitalize transition-colors cursor-pointer ${
+                            logoPosition === pos
+                              ? 'border-neutral-900 bg-neutral-900 text-white'
+                              : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100'
+                          }`}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Logo Size */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-600 mb-1.5">
+                      Logo Size
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['small', 'medium', 'large'] as const).map((sz) => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => setLogoSize(sz)}
+                          className={`text-xs py-1.5 px-2 rounded-md border font-medium capitalize transition-colors cursor-pointer ${
+                            logoSize === sz
+                              ? 'border-neutral-900 bg-neutral-900 text-white'
+                              : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100'
+                          }`}
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Primary Accent Color */}

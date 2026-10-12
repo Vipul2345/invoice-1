@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account and profile data in Firestore",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "plan": { "type": "string", "enum": ["free", "drive", "pro"] }
+      },
+      "required": ["uid", "email"]
+    },
+    "BusinessProfile": {
+      "title": "BusinessProfile",
+      "description": "Business information owned by user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "taxId": { "type": "string" },
+        "website": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record scoped to user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "taxId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Invoice record scoped to user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "date": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "currency": { "type": "string" },
+        "currencySymbol": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "pending", "paid", "overdue"] },
+        "country": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "invoiceNumber", "grandTotal", "status"]
+    },
+    "CustomTemplate": {
+      "title": "CustomTemplate",
+      "description": "Custom invoice template created by user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "isPremium": { "type": "boolean" },
+        "style": { "type": "string" }
+      },
+      "required": ["id", "name", "style"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "UserProfile" },
+      "description": "Authenticated user profile record"
+    },
+    "/users/{userId}/businesses/{businessId}": {
+      "schema": { "$ref": "BusinessProfile" },
+      "description": "User business profile data"
+    },
+    "/users/{userId}/customers/{customerId}": {
+      "schema": { "$ref": "Customer" },
+      "description": "User customer records"
+    },
+    "/users/{userId}/invoices/{invoiceId}": {
+      "schema": { "$ref": "Invoice" },
+      "description": "User cloud invoices"
+    },
+    "/users/{userId}/templates/{templateId}": {
+      "schema": { "$ref": "CustomTemplate" },
+      "description": "User custom invoice templates"
+    }
+  }
+}
