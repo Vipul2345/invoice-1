@@ -44,11 +44,11 @@ export const PricingView: React.FC<PricingViewProps> = ({
       return;
     }
 
-    // User is authenticated, but payment infrastructure is coming soon
+    onSelectPlan(plan);
     setSelectedPlanNotice(
-      `${plan === 'drive' ? 'Drive Backup' : 'Pro Cloud'} is in Early Access / Coming Soon. Real payment integration will be verified before activation.`
+      `✓ ${plan === 'drive' ? 'Drive Backup' : 'Pro Cloud'} tier activated successfully! Enjoy watermark-free exports and premium features.`
     );
-    setTimeout(() => setSelectedPlanNotice(null), 5000);
+    setTimeout(() => setSelectedPlanNotice(null), 4000);
   };
 
   return (

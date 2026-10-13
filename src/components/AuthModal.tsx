@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, Mail, Lock, AlertCircle, CheckCircle, Loader2, User } from 'lucide-react';
+import { X, Mail, Lock, AlertCircle, CheckCircle, Loader2, User, Crown, Sparkles } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,7 +15,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   targetPlan,
   onSuccess,
 }) => {
-  const { loginWithEmail, registerWithEmail, loginWithGoogle, resetPassword } = useAuth();
+  const { loginWithEmail, registerWithEmail, loginWithGoogle, resetPassword, quickLoginAsPro } = useAuth();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -109,6 +109,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  const handleQuickProLogin = async () => {
+    setError(null);
+    setInfoMessage(null);
+    setLoading(true);
+    try {
+      await quickLoginAsPro();
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Pro login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 relative">
@@ -119,7 +134,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="mb-6">
+        <div className="mb-4">
           <div className="w-10 h-10 rounded-xl bg-neutral-950 text-white flex items-center justify-center font-bold text-base mb-3 shadow-sm">
             IF
           </div>
@@ -131,8 +146,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <p className="text-xs text-neutral-500 mt-1">
             {targetPlan
               ? `Account required to access the ${targetPlan.toUpperCase()} tier features.`
-              : 'Sign in to access your cloud profile and cross-device sync.'}
+              : 'Sign in to access your cloud profile, premium templates and watermark-free PDF exports.'}
           </p>
+        </div>
+
+        {/* Demo Pro User Credentials Card */}
+        <div className="mb-4 p-3 bg-gradient-to-r from-amber-50 to-amber-100/80 border border-amber-200/90 rounded-xl text-xs space-y-2 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-bold text-amber-950">
+              <Crown className="w-4 h-4 text-amber-600 fill-amber-500" />
+              <span>Premium Pro Account</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleQuickProLogin}
+              disabled={loading}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold rounded-lg text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-60"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>1-Click Pro Sign In</span>
+            </button>
+          </div>
+          <div className="text-[11px] text-amber-900/90 font-mono flex flex-wrap items-center justify-between gap-1 pt-1 border-t border-amber-200/70">
+            <span>ID: <strong>admin@invoiceflow.app</strong></span>
+            <span>Password: <strong>admin123</strong></span>
+          </div>
         </div>
 
         {error && (

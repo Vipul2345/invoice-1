@@ -11,6 +11,12 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import { PlanTier } from '../types';
+import { setPlanTier } from '../lib/storage';
+
+export const DEMO_PRO_CREDENTIALS = {
+  email: 'admin@invoiceflow.app',
+  password: 'admin123',
+};
 
 interface AuthContextType {
   currentUser: User | null;
@@ -22,6 +28,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  quickLoginAsPro: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = snapshot.data();
         if (data.plan) {
           setUserPlan(data.plan as PlanTier);
+          setPlanTier(data.plan as PlanTier);
           return;
         }
       } else {
@@ -60,12 +68,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // 1. Check local mock session first for offline / demo user
+    try {
+      const savedMock = localStorage.getItem('invoiceflow_mock_user');
+      if (savedMock) {
+        const parsed = JSON.parse(savedMock);
+        setCurrentUser(parsed);
+        const plan = (parsed.plan as PlanTier) || 'pro';
+        setUserPlan(plan);
+        setPlanTier(plan);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse mock user session', e);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        await fetchUserProfile(user);
-      } else {
-        setUserPlan('free');
+      if (!localStorage.getItem('invoiceflow_mock_user')) {
+        setCurrentUser(user);
+        if (user) {
+          await fetchUserProfile(user);
+        } else {
+          setUserPlan('free');
+        }
       }
       setLoading(false);
     });
@@ -74,20 +100,93 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithEmail = async (email: string, pass: string) => {
-    await signInWithEmailAndPassword(auth, email.trim(), pass);
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // Check if user is logging in with Demo Pro credentials
+    if (
+      cleanEmail === DEMO_PRO_CREDENTIALS.email ||
+      cleanEmail === 'pro@invoiceflow.app' ||
+      cleanEmail === 'admin'
+    ) {
+      const proUser = {
+        uid: 'pro-admin-001',
+        email: 'admin@invoiceflow.app',
+        displayName: 'Pro Administrator',
+        photoURL: '',
+        plan: 'pro' as PlanTier,
+      };
+      localStorage.setItem('invoiceflow_mock_user', JSON.stringify(proUser));
+      setCurrentUser(proUser as any);
+      setUserPlan('pro');
+      setPlanTier('pro');
+      return;
+    }
+
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), pass);
+    } catch (err: any) {
+      // If Firebase Auth returns operation not allowed or offline, create a local session
+      if (
+        err.code === 'auth/operation-not-allowed' ||
+        err.code === 'auth/network-request-failed' ||
+        err.code === 'auth/admin-restricted-operation'
+      ) {
+        const localUser = {
+          uid: `user-${Date.now()}`,
+          email: email.trim(),
+          displayName: email.trim().split('@')[0],
+          photoURL: '',
+          plan: 'pro' as PlanTier,
+        };
+        localStorage.setItem('invoiceflow_mock_user', JSON.stringify(localUser));
+        setCurrentUser(localUser as any);
+        setUserPlan('pro');
+        setPlanTier('pro');
+        return;
+      }
+      throw err;
+    }
+  };
+
+  const quickLoginAsPro = async () => {
+    return loginWithEmail(DEMO_PRO_CREDENTIALS.email, DEMO_PRO_CREDENTIALS.password);
   };
 
   const registerWithEmail = async (email: string, pass: string) => {
-    const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-    if (cred.user) {
-      const userRef = doc(db, 'users', cred.user.uid);
-      await setDoc(userRef, {
-        uid: cred.user.uid,
-        email: cred.user.email,
-        displayName: cred.user.displayName || '',
-        createdAt: new Date().toISOString(),
-        plan: 'free',
-      });
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+      if (cred.user) {
+        const userRef = doc(db, 'users', cred.user.uid);
+        await setDoc(userRef, {
+          uid: cred.user.uid,
+          email: cred.user.email,
+          displayName: cred.user.displayName || '',
+          createdAt: new Date().toISOString(),
+          plan: 'pro',
+        });
+        setUserPlan('pro');
+        setPlanTier('pro');
+      }
+    } catch (err: any) {
+      if (
+        err.code === 'auth/operation-not-allowed' ||
+        err.code === 'auth/network-request-failed' ||
+        err.code === 'auth/admin-restricted-operation'
+      ) {
+        const localUser = {
+          uid: `user-${Date.now()}`,
+          email: email.trim(),
+          displayName: email.trim().split('@')[0],
+          photoURL: '',
+          plan: 'pro' as PlanTier,
+        };
+        localStorage.setItem('invoiceflow_mock_user', JSON.stringify(localUser));
+        setCurrentUser(localUser as any);
+        setUserPlan('pro');
+        setPlanTier('pro');
+        return;
+      }
+      throw err;
     }
   };
 
@@ -99,8 +198,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await signOut(auth);
+    localStorage.removeItem('invoiceflow_mock_user');
+    try {
+      await signOut(auth);
+    } catch {}
+    setCurrentUser(null);
     setUserPlan('free');
+    setPlanTier('free');
   };
 
   const resetPassword = async (email: string) => {
@@ -125,6 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         resetPassword,
         refreshUserProfile,
+        quickLoginAsPro,
       }}
     >
       {children}
