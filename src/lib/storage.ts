@@ -29,6 +29,90 @@ const STORAGE_KEYS = {
   ONBOARDED: 'invoiceflow_onboarded',
 };
 
+const LEGACY_SEED_PURGED_KEY = 'invoiceflow_seed_purged_v2';
+
+function purgeLegacySeedDataIfNeeded(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(LEGACY_SEED_PURGED_KEY)) return;
+
+    // Check if business profile is Acme Services seed
+    const rawBusiness = localStorage.getItem(STORAGE_KEYS.BUSINESS);
+    if (rawBusiness) {
+      try {
+        const parsed = JSON.parse(rawBusiness);
+        if (parsed.name === 'Acme Services' && parsed.email === 'billing@acmeservices.io') {
+          localStorage.removeItem(STORAGE_KEYS.BUSINESS);
+        }
+      } catch {}
+    }
+
+    // Check if customers contain seed customer IDs
+    const rawCustomers = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+    if (rawCustomers) {
+      try {
+        const parsed = JSON.parse(rawCustomers);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(
+            (c: any) => !['customer-001', 'customer-002', 'customer-003', 'customer-004'].includes(c.id)
+          );
+          localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(filtered));
+        }
+      } catch {}
+    }
+
+    // Check if invoices contain seed invoice IDs
+    const rawInvoices = localStorage.getItem(STORAGE_KEYS.INVOICES);
+    if (rawInvoices) {
+      try {
+        const parsed = JSON.parse(rawInvoices);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(
+            (i: any) => !['inv-0001', 'inv-0002', 'inv-0003', 'inv-0004'].includes(i.id)
+          );
+          localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(filtered));
+        }
+      } catch {}
+    }
+
+    // Check if quotations contain seed quotation IDs
+    const rawQuotations = localStorage.getItem(STORAGE_KEYS.QUOTATIONS);
+    if (rawQuotations) {
+      try {
+        const parsed = JSON.parse(rawQuotations);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(
+            (q: any) => !['quo-0001', 'quo-0002'].includes(q.id)
+          );
+          localStorage.setItem(STORAGE_KEYS.QUOTATIONS, JSON.stringify(filtered));
+        }
+      } catch {}
+    }
+
+    // Reset counters in settings if they are still on seed values
+    const rawSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    if (rawSettings) {
+      try {
+        const parsed = JSON.parse(rawSettings);
+        if (parsed.nextInvoiceNumber === 4 || parsed.nextInvoiceNumber === 5) {
+          parsed.nextInvoiceNumber = 1;
+        }
+        if (parsed.nextQuotationNumber === 2 || parsed.nextQuotationNumber === 3) {
+          parsed.nextQuotationNumber = 1;
+        }
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(parsed));
+      } catch {}
+    }
+
+    localStorage.setItem(LEGACY_SEED_PURGED_KEY, 'true');
+  } catch (e) {
+    console.warn('Could not run seed purge:', e);
+  }
+}
+
+// Run initial purge check
+purgeLegacySeedDataIfNeeded();
+
 // Safe localStorage accessor
 function safeGet<T>(key: string, fallback: T): T {
   try {

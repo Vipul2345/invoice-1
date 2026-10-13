@@ -27,6 +27,7 @@ import {
   Calculator,
   Calendar,
 } from 'lucide-react';
+import { showToast } from './ToastNotification';
 
 interface QuotationEditorProps {
   initialQuotation?: Quotation;
@@ -308,6 +309,7 @@ export const QuotationEditor: React.FC<QuotationEditorProps> = ({
         };
         saveCustomer(createdCustomer);
         onCustomerCreated(createdCustomer);
+        showToast(`Customer "${createdCustomer.name}" created!`, 'info');
         customerToUse = createdCustomer;
       }
     }

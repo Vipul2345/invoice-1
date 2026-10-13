@@ -25,6 +25,7 @@ import {
   ArrowDown,
   Calculator,
 } from 'lucide-react';
+import { showToast } from './ToastNotification';
 
 interface InvoiceEditorProps {
   initialInvoice?: Invoice;
@@ -310,6 +311,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         };
         saveCustomer(createdCustomer);
         onCustomerCreated(createdCustomer);
+        showToast(`Customer "${createdCustomer.name}" created!`, 'info');
         customerToUse = createdCustomer;
       }
     }

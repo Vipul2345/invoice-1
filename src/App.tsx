@@ -51,6 +51,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { BackupReminderBanner } from './components/BackupReminderBanner';
 import { LegalDocType } from './components/LegalDocumentViewer';
 import { AuthModal } from './components/AuthModal';
+import { ToastNotificationContainer, showToast } from './components/ToastNotification';
 import { useAuth } from './context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -186,9 +187,11 @@ export default function App() {
     setActiveInvoiceForEdit(null);
     if (previewImmediately) {
       setActiveInvoiceForPreview(updated);
+      showToast(`Invoice ${updated.invoiceNumber} generated!`, 'success');
     } else {
       setActiveInvoiceForPreview(null);
       setCurrentTab('invoices');
+      showToast(`Invoice ${updated.invoiceNumber} saved!`, 'success');
     }
   };
 
@@ -202,6 +205,7 @@ export default function App() {
     if (dup) {
       reloadData();
       setActiveInvoiceForPreview(dup);
+      showToast(`Invoice duplicated as ${dup.invoiceNumber}!`, 'success');
     }
   };
 
@@ -214,6 +218,7 @@ export default function App() {
       if (activeInvoiceForPreview?.id === id) {
         setActiveInvoiceForPreview(null);
       }
+      showToast(`Invoice ${num} deleted.`, 'info');
     }
   };
 
@@ -252,9 +257,11 @@ export default function App() {
     setActiveQuotationForEdit(null);
     if (previewImmediately) {
       setActiveQuotationForPreview(updated);
+      showToast(`Quotation ${updated.quotationNumber} generated!`, 'success');
     } else {
       setActiveQuotationForPreview(null);
       setCurrentTab('quotations');
+      showToast(`Quotation ${updated.quotationNumber} saved!`, 'success');
     }
   };
 
@@ -268,6 +275,7 @@ export default function App() {
     if (dup) {
       reloadData();
       setActiveQuotationForPreview(dup);
+      showToast(`Quotation duplicated as ${dup.quotationNumber}!`, 'success');
     }
   };
 
@@ -280,6 +288,7 @@ export default function App() {
       if (activeQuotationForPreview?.id === id) {
         setActiveQuotationForPreview(null);
       }
+      showToast(`Quotation ${num} deleted.`, 'info');
     }
   };
 
@@ -289,8 +298,9 @@ export default function App() {
     if (result.success && result.invoice) {
       setActiveQuotationForPreview(null);
       setActiveInvoiceForPreview(result.invoice);
+      showToast(`Invoice ${result.invoice.invoiceNumber} generated from quotation!`, 'success');
     } else if (result.error) {
-      alert(result.error);
+      showToast(result.error, 'error');
     }
   };
 
@@ -304,6 +314,7 @@ export default function App() {
     saveInvoice(updated);
     setActiveInvoiceForPreview(updated);
     reloadData();
+    showToast(`Invoice marked as ${status.toUpperCase()}`, 'info');
   };
 
   const handleTemplateChangeOnPreview = (templateId: string) => {
@@ -316,17 +327,20 @@ export default function App() {
     saveInvoice(updated);
     setActiveInvoiceForPreview(updated);
     reloadData();
+    showToast('Invoice template updated!', 'info');
   };
 
   const handlePlanChange = (plan: PlanTier) => {
     setPlanTier(plan);
     setSettings((prev) => ({ ...prev, plan }));
     reloadData();
+    showToast(`Active plan set to ${plan.toUpperCase()}`, 'info');
   };
 
   const handleCountryChange = (country: CountryCode) => {
     setCountry(country);
     reloadData();
+    showToast(`Country set to ${country}`, 'info');
   };
 
   const handleSelectDefaultTemplate = (templateId: string) => {
@@ -336,6 +350,7 @@ export default function App() {
     };
     saveSettings(updated);
     setSettings(updated);
+    showToast('Default template updated!', 'success');
   };
 
   // Onboarding Complete
@@ -522,6 +537,7 @@ export default function App() {
                 saveQuotation(updated);
                 setActiveQuotationForPreview(updated);
                 reloadData();
+                showToast(`Quotation marked as ${status.toUpperCase()}`, 'info');
               }}
               onTemplateChange={(templateId) => {
                 const updated: Quotation = {
@@ -532,6 +548,7 @@ export default function App() {
                 saveQuotation(updated);
                 setActiveQuotationForPreview(updated);
                 reloadData();
+                showToast('Quotation template updated!', 'info');
               }}
             />
           ) : (
@@ -653,6 +670,9 @@ export default function App() {
           onSeePlans={handleOnboardingSeePlans}
         />
       )}
+
+      {/* Floating Toast Notifications */}
+      <ToastNotificationContainer />
     </div>
   );
 }

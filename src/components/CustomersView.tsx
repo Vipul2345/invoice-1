@@ -15,6 +15,7 @@ import {
   X,
   CheckCircle,
 } from 'lucide-react';
+import { showToast } from './ToastNotification';
 
 interface CustomersViewProps {
   customers: Customer[];
@@ -89,12 +90,14 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
     saveCustomer(payload);
     setIsModalOpen(false);
     onCustomerUpdated();
+    showToast(`Customer "${payload.name}" saved successfully!`, 'success');
   };
 
   const handleDelete = (id: string, customerName: string) => {
     if (confirm(`Are you sure you want to delete customer "${customerName}"?`)) {
       deleteCustomer(id);
       onCustomerUpdated();
+      showToast(`Customer "${customerName}" deleted.`, 'info');
     }
   };
 

@@ -17,6 +17,7 @@ import { HelpFaqSection } from './HelpFaqSection';
 import { ContactSupportSection, ContactCategory } from './ContactSupportSection';
 import { DataAndBackupSection } from './DataAndBackupSection';
 import { LogoUploader } from './LogoUploader';
+import { showToast } from './ToastNotification';
 import {
   Building,
   Globe,
@@ -146,6 +147,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     };
     saveBusinessProfile(updated);
     onBusinessUpdated(updated);
+    showToast('Company logo updated!', 'success');
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -169,6 +171,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     saveBusinessProfile(updated);
     onBusinessUpdated(updated);
     showNotification('Business profile updated and saved locally.');
+    showToast('Business profile updated successfully!', 'success');
   };
 
   const handleSaveCountry = (e: React.FormEvent) => {
@@ -183,6 +186,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     saveSettings(updated);
     onSettingsUpdated(updated);
     showNotification(`Operating country updated to ${config.name}.`);
+    showToast(`Operating country updated to ${config.name}!`, 'success');
   };
 
   const handleSaveInvoiceSettings = (e: React.FormEvent) => {
@@ -197,6 +201,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     saveSettings(updated);
     onSettingsUpdated(updated);
     showNotification('Invoice preferences updated.');
+    showToast('Invoice preferences updated!', 'success');
   };
 
   const handleSwitchPlan = (newPlan: PlanTier) => {
@@ -204,6 +209,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const updated: AppSettings = { ...settings, plan: newPlan };
     onSettingsUpdated(updated);
     showNotification(`Active plan updated to ${newPlan.toUpperCase()} for testing.`);
+    showToast(`Active plan set to ${newPlan.toUpperCase()}`, 'info');
   };
 
   const currentCountryConfig = COUNTRIES[settings.country] || COUNTRIES.OTHER;

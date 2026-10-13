@@ -153,6 +153,20 @@ export interface TemplateConfig {
   headerLayout: 'standard' | 'compact' | 'split';
   tableStyle: 'clean' | 'striped' | 'bordered';
   accentIntensity: 'subtle' | 'bold';
+  // Comprehensive component toggles for custom template builder
+  showBusinessDetails?: boolean;
+  showCustomerDetails?: boolean;
+  showDocTitle?: boolean;
+  showInvoiceMeta?: boolean;
+  showDueDate?: boolean;
+  showPaymentTerms?: boolean;
+  showItemCode?: boolean;
+  showUnit?: boolean;
+  showTaxColumn?: boolean;
+  showDiscountColumn?: boolean;
+  showNotes?: boolean;
+  showTerms?: boolean;
+  showSignatory?: boolean;
 }
 
 export interface InvoiceTemplate {

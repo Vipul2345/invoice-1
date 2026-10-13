@@ -33,7 +33,7 @@ function runStorageTests() {
 
   // 1. Initial quotations check
   const quotations = getQuotations();
-  assert(quotations.length > 0, 'Initial quotations loaded');
+  assert(Array.isArray(quotations), 'Initial quotations list initialized');
 
   const testQuo: Quotation = {
     id: 'test-quo-999',
