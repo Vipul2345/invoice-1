@@ -543,3 +543,8 @@ export const INITIAL_SETTINGS: AppSettings = {
   },
 };
 
+export const DEMO_PRO_CREDENTIALS = {
+  email: 'admin@invoiceflow.app',
+  password: 'admin123',
+};
+

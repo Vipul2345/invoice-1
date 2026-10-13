@@ -12,11 +12,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import { PlanTier } from '../types';
 import { setPlanTier } from '../lib/storage';
-
-export const DEMO_PRO_CREDENTIALS = {
-  email: 'admin@invoiceflow.app',
-  password: 'admin123',
-};
+import { DEMO_PRO_CREDENTIALS } from '../lib/constants';
 
 interface AuthContextType {
   currentUser: User | null;
