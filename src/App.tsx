@@ -12,11 +12,13 @@ import {
   InvoiceTemplate,
   PlanTier,
   CountryCode,
+  Quotation,
 } from './types';
 import {
   getBusinessProfile,
   getCustomers,
   getInvoices,
+  getQuotations,
   getSettings,
   getAllTemplates,
   isOnboarded,
@@ -24,6 +26,10 @@ import {
   saveInvoice,
   deleteInvoice,
   duplicateInvoice,
+  saveQuotation,
+  deleteQuotation,
+  duplicateQuotation,
+  convertQuotationToInvoice,
   setPlanTier,
   setCountry,
   saveSettings,
@@ -33,6 +39,9 @@ import { DashboardView } from './components/DashboardView';
 import { InvoicesListView } from './components/InvoicesListView';
 import { InvoiceEditor } from './components/InvoiceEditor';
 import { InvoicePreview } from './components/InvoicePreview';
+import { QuotationsListView } from './components/QuotationsListView';
+import { QuotationEditor } from './components/QuotationEditor';
+import { QuotationPreview } from './components/QuotationPreview';
 import { CustomersView } from './components/CustomersView';
 import { TemplatesView } from './components/TemplatesView';
 import { ReportsView } from './components/ReportsView';
@@ -56,6 +65,12 @@ export default function App() {
   const [activeInvoiceForEdit, setActiveInvoiceForEdit] = useState<Invoice | null>(null);
   const [activeInvoiceForPreview, setActiveInvoiceForPreview] = useState<Invoice | null>(null);
 
+  // Quotation States
+  const [quotations, setQuotations] = useState<Quotation[]>(getQuotations());
+  const [isCreatingQuotation, setIsCreatingQuotation] = useState(false);
+  const [activeQuotationForEdit, setActiveQuotationForEdit] = useState<Quotation | null>(null);
+  const [activeQuotationForPreview, setActiveQuotationForPreview] = useState<Quotation | null>(null);
+
   // App Data States
   const [business, setBusiness] = useState<BusinessProfile>(getBusinessProfile());
   const [customers, setCustomers] = useState<Customer[]>(getCustomers());
@@ -73,6 +88,7 @@ export default function App() {
     setBusiness(getBusinessProfile());
     setCustomers(getCustomers());
     setInvoices(getInvoices());
+    setQuotations(getQuotations());
     setSettings(getSettings());
     setTemplates(getAllTemplates());
   };
@@ -104,10 +120,21 @@ export default function App() {
         setActiveInvoiceForPreview(null);
         return;
       }
+      if (activeQuotationForPreview) {
+        setActiveQuotationForPreview(null);
+        return;
+      }
       if (isCreatingInvoice) {
         if (window.confirm('Leave invoice editor? Any unsaved changes will be lost.')) {
           setIsCreatingInvoice(false);
           setActiveInvoiceForEdit(null);
+        }
+        return;
+      }
+      if (isCreatingQuotation) {
+        if (window.confirm('Leave quotation editor? Any unsaved changes will be lost.')) {
+          setIsCreatingQuotation(false);
+          setActiveQuotationForEdit(null);
         }
         return;
       }
@@ -122,25 +149,34 @@ export default function App() {
     return () => {
       backListenerPromise.then((handle) => handle.remove()).catch(() => {});
     };
-  }, [authModalOpen, showOnboarding, activeInvoiceForPreview, isCreatingInvoice, currentTab]);
+  }, [authModalOpen, showOnboarding, activeInvoiceForPreview, activeQuotationForPreview, isCreatingInvoice, isCreatingQuotation, currentTab]);
 
   // Handlers for Navigation & Invoice Workflow
   const handleStartCreateInvoice = () => {
     setActiveInvoiceForEdit(null);
     setActiveInvoiceForPreview(null);
     setIsCreatingInvoice(true);
+    setActiveQuotationForEdit(null);
+    setActiveQuotationForPreview(null);
+    setIsCreatingQuotation(false);
   };
 
   const handleStartEditInvoice = (invoice: Invoice) => {
     setActiveInvoiceForPreview(null);
     setActiveInvoiceForEdit(invoice);
     setIsCreatingInvoice(true);
+    setActiveQuotationForEdit(null);
+    setActiveQuotationForPreview(null);
+    setIsCreatingQuotation(false);
   };
 
   const handleViewInvoice = (invoice: Invoice) => {
     setIsCreatingInvoice(false);
     setActiveInvoiceForEdit(null);
     setActiveInvoiceForPreview(invoice);
+    setActiveQuotationForEdit(null);
+    setActiveQuotationForPreview(null);
+    setIsCreatingQuotation(false);
   };
 
   const handleSaveInvoice = (saved: Invoice, previewImmediately = false) => {
@@ -178,6 +214,83 @@ export default function App() {
       if (activeInvoiceForPreview?.id === id) {
         setActiveInvoiceForPreview(null);
       }
+    }
+  };
+
+  // Handlers for Quotation Workflow
+  const handleStartCreateQuotation = () => {
+    setActiveInvoiceForEdit(null);
+    setActiveInvoiceForPreview(null);
+    setIsCreatingInvoice(false);
+    setActiveQuotationForEdit(null);
+    setActiveQuotationForPreview(null);
+    setIsCreatingQuotation(true);
+  };
+
+  const handleStartEditQuotation = (quotation: Quotation) => {
+    setActiveInvoiceForEdit(null);
+    setActiveInvoiceForPreview(null);
+    setIsCreatingInvoice(false);
+    setActiveQuotationForPreview(null);
+    setActiveQuotationForEdit(quotation);
+    setIsCreatingQuotation(true);
+  };
+
+  const handleViewQuotation = (quotation: Quotation) => {
+    setIsCreatingInvoice(false);
+    setActiveInvoiceForEdit(null);
+    setActiveInvoiceForPreview(null);
+    setIsCreatingQuotation(false);
+    setActiveQuotationForEdit(null);
+    setActiveQuotationForPreview(quotation);
+  };
+
+  const handleSaveQuotation = (saved: Quotation, previewImmediately = false) => {
+    const updated = saveQuotation(saved);
+    reloadData();
+    setIsCreatingQuotation(false);
+    setActiveQuotationForEdit(null);
+    if (previewImmediately) {
+      setActiveQuotationForPreview(updated);
+    } else {
+      setActiveQuotationForPreview(null);
+      setCurrentTab('quotations');
+    }
+  };
+
+  const handleCancelQuotationEditor = () => {
+    setIsCreatingQuotation(false);
+    setActiveQuotationForEdit(null);
+  };
+
+  const handleDuplicateQuotation = (id: string) => {
+    const dup = duplicateQuotation(id);
+    if (dup) {
+      reloadData();
+      setActiveQuotationForPreview(dup);
+    }
+  };
+
+  const handleDeleteQuotation = (id: string) => {
+    const target = quotations.find((q) => q.id === id);
+    const num = target?.quotationNumber || 'this quotation';
+    if (confirm(`Are you sure you want to delete ${num}?`)) {
+      deleteQuotation(id);
+      reloadData();
+      if (activeQuotationForPreview?.id === id) {
+        setActiveQuotationForPreview(null);
+      }
+    }
+  };
+
+  const handleConvertQuotationToInvoice = (quotationId: string) => {
+    const result = convertQuotationToInvoice(quotationId);
+    reloadData();
+    if (result.success && result.invoice) {
+      setActiveQuotationForPreview(null);
+      setActiveInvoiceForPreview(result.invoice);
+    } else if (result.error) {
+      alert(result.error);
     }
   };
 
@@ -244,6 +357,9 @@ export default function App() {
     setIsCreatingInvoice(false);
     setActiveInvoiceForEdit(null);
     setActiveInvoiceForPreview(null);
+    setIsCreatingQuotation(false);
+    setActiveQuotationForEdit(null);
+    setActiveQuotationForPreview(null);
     setCurrentTab('settings');
     if (type === 'databackup') {
       setSettingsTab('legal_backup');
@@ -259,7 +375,10 @@ export default function App() {
 
   // Active Template for Preview
   const activeTemplate =
-    templates.find((t) => t.id === activeInvoiceForPreview?.templateId) ||
+    templates.find(
+      (t) =>
+        t.id === (activeInvoiceForPreview?.templateId || activeQuotationForPreview?.templateId)
+    ) ||
     templates.find((t) => t.id === settings.defaultTemplateId) ||
     templates[0];
 
@@ -314,14 +433,21 @@ export default function App() {
           setIsCreatingInvoice(false);
           setActiveInvoiceForEdit(null);
           setActiveInvoiceForPreview(null);
+          setIsCreatingQuotation(false);
+          setActiveQuotationForEdit(null);
+          setActiveQuotationForPreview(null);
           setCurrentTab(tab);
         }}
         onCreateInvoice={handleStartCreateInvoice}
+        onCreateQuotation={handleStartCreateQuotation}
         currentPlan={settings.plan}
         onUpgradeClick={() => {
           setIsCreatingInvoice(false);
           setActiveInvoiceForEdit(null);
           setActiveInvoiceForPreview(null);
+          setIsCreatingQuotation(false);
+          setActiveQuotationForEdit(null);
+          setActiveQuotationForPreview(null);
           setCurrentTab('pricing');
         }}
         onOpenAuthModal={() => handleRequestAuth()}
@@ -330,7 +456,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-8 flex flex-col">
         {/* Backup Reminder Banner (Shows for Free users) */}
-        {!isCreatingInvoice && !activeInvoiceForPreview && (
+        {!isCreatingInvoice && !activeInvoiceForPreview && !isCreatingQuotation && !activeQuotationForPreview && (
           <BackupReminderBanner
             plan={settings.plan}
             onLearnMore={() => {
@@ -352,6 +478,17 @@ export default function App() {
               onCancel={handleCancelEditor}
               onCustomerCreated={reloadData}
             />
+          ) : isCreatingQuotation ? (
+            /* Active Flow: Quotation Editor */
+            <QuotationEditor
+              initialQuotation={activeQuotationForEdit || undefined}
+              customers={customers}
+              business={business}
+              settings={settings}
+              onSave={handleSaveQuotation}
+              onCancel={handleCancelQuotationEditor}
+              onCustomerCreated={reloadData}
+            />
           ) : activeInvoiceForPreview ? (
             /* Active Flow: Fullscreen Invoice Preview & Print */
             <InvoicePreview
@@ -364,6 +501,38 @@ export default function App() {
               onDuplicate={() => handleDuplicateInvoice(activeInvoiceForPreview.id)}
               onStatusChange={handleStatusChangeOnPreview}
               onTemplateChange={handleTemplateChangeOnPreview}
+            />
+          ) : activeQuotationForPreview ? (
+            /* Active Flow: Fullscreen Quotation Preview & Print */
+            <QuotationPreview
+              quotation={activeQuotationForPreview}
+              business={business}
+              template={activeTemplate}
+              plan={settings.plan}
+              onBack={() => setActiveQuotationForPreview(null)}
+              onEdit={() => handleStartEditQuotation(activeQuotationForPreview)}
+              onDuplicate={() => handleDuplicateQuotation(activeQuotationForPreview.id)}
+              onConvertToInvoice={handleConvertQuotationToInvoice}
+              onStatusChange={(status) => {
+                const updated: Quotation = {
+                  ...activeQuotationForPreview,
+                  status,
+                  updatedAt: new Date().toISOString().split('T')[0],
+                };
+                saveQuotation(updated);
+                setActiveQuotationForPreview(updated);
+                reloadData();
+              }}
+              onTemplateChange={(templateId) => {
+                const updated: Quotation = {
+                  ...activeQuotationForPreview,
+                  templateId,
+                  updatedAt: new Date().toISOString().split('T')[0],
+                };
+                saveQuotation(updated);
+                setActiveQuotationForPreview(updated);
+                reloadData();
+              }}
             />
           ) : (
             /* Normal Tabbed Views */
@@ -393,6 +562,19 @@ export default function App() {
                   onEditInvoice={handleStartEditInvoice}
                   onDuplicateInvoice={handleDuplicateInvoice}
                   onDeleteInvoice={handleDeleteInvoice}
+                />
+              )}
+
+              {currentTab === 'quotations' && (
+                <QuotationsListView
+                  quotations={quotations}
+                  settings={settings}
+                  onCreateQuotation={handleStartCreateQuotation}
+                  onViewQuotation={handleViewQuotation}
+                  onEditQuotation={handleStartEditQuotation}
+                  onDuplicateQuotation={handleDuplicateQuotation}
+                  onDeleteQuotation={handleDeleteQuotation}
+                  onConvertToInvoice={handleConvertQuotationToInvoice}
                 />
               )}
 

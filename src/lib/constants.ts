@@ -1,4 +1,4 @@
-import { CountryCode, CountryConfig, InvoiceTemplate, BusinessProfile, Customer, Invoice, AppSettings } from '../types';
+import { CountryCode, CountryConfig, InvoiceTemplate, BusinessProfile, Customer, Invoice, Quotation, AppSettings } from '../types';
 
 export const COUNTRIES: Record<CountryCode, CountryConfig> = {
   IN: {
@@ -105,6 +105,65 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
 };
 
 export const DEFAULT_TEMPLATES: InvoiceTemplate[] = [
+  {
+    id: 'clean-professional',
+    name: 'Clean Professional',
+    description: 'Emerald green accent styling with clean structured headers, readable alternating rows, and clearly separated tax totals.',
+    isPremium: false,
+    style: 'clean-professional',
+    config: {
+      primaryColor: '#15803d',
+      secondaryColor: '#16a34a',
+      font: 'sans',
+      showLogo: true,
+      logoPosition: 'left',
+      logoSize: 'medium',
+      showTaxBreakdown: true,
+      showPaymentDetails: true,
+      headerLayout: 'split',
+      tableStyle: 'striped',
+      accentIntensity: 'bold',
+    },
+  },
+  {
+    id: 'detailed-business',
+    name: 'Detailed Business',
+    description: 'Comprehensive business layout supporting item codes, units, quantity, tax breakdown, and terms. Ideal for contractors and suppliers.',
+    isPremium: false,
+    style: 'detailed-business',
+    config: {
+      primaryColor: '#1e293b',
+      secondaryColor: '#475569',
+      font: 'sans',
+      showLogo: true,
+      logoPosition: 'left',
+      logoSize: 'medium',
+      showTaxBreakdown: true,
+      showPaymentDetails: true,
+      headerLayout: 'standard',
+      tableStyle: 'bordered',
+      accentIntensity: 'bold',
+    },
+  },
+  {
+    id: 'modern-minimal',
+    name: 'Modern Minimal',
+    description: 'Generous whitespace with strong visual hierarchy, prominent document number, and premium uncluttered appearance.',
+    isPremium: false,
+    style: 'modern-minimal',
+    config: {
+      primaryColor: '#171717',
+      font: 'sans',
+      showLogo: true,
+      logoPosition: 'left',
+      logoSize: 'medium',
+      showTaxBreakdown: true,
+      showPaymentDetails: true,
+      headerLayout: 'split',
+      tableStyle: 'clean',
+      accentIntensity: 'subtle',
+    },
+  },
   {
     id: 'minimal',
     name: 'Minimal Clean',
@@ -411,6 +470,61 @@ export const INITIAL_INVOICES: Invoice[] = [
   },
 ];
 
+export const INITIAL_QUOTATIONS: Quotation[] = [
+  {
+    id: 'quo-0001',
+    quotationNumber: 'QUO-0001',
+    customerId: 'customer-001',
+    customerSnapshot: INITIAL_CUSTOMERS[0],
+    date: '2026-10-10',
+    validUntil: '2026-11-09',
+    currency: 'USD',
+    currencySymbol: '$',
+    paymentTerms: 'Net 14',
+    items: [
+      {
+        id: 'item-q101',
+        description: 'Comprehensive Digital Transformation Strategy & Architecture',
+        itemCode: 'SRV-ARCH-01',
+        unit: 'hrs',
+        quantity: 20,
+        rate: 150,
+        taxPercent: 0,
+        discountPercent: 5,
+        pricingMode: 'exclusive',
+        taxAmount: 0,
+        taxableAmount: 2850,
+        amount: 2850,
+      },
+      {
+        id: 'item-q102',
+        description: 'Enterprise Cloud Security Assessment & Penetration Report',
+        itemCode: 'SRV-SEC-02',
+        unit: 'units',
+        quantity: 1,
+        rate: 2200,
+        taxPercent: 0,
+        discountPercent: 0,
+        pricingMode: 'exclusive',
+        taxAmount: 0,
+        taxableAmount: 2200,
+        amount: 2200,
+      },
+    ],
+    subtotal: 5200,
+    totalDiscount: 150,
+    totalTax: 0,
+    grandTotal: 5050,
+    notes: 'This quotation is valid for 30 calendar days from the date of issue. Pricing includes all standard advisory documentation.',
+    paymentDetails: INITIAL_BUSINESS_PROFILE.bankDetails,
+    status: 'draft',
+    templateId: 'clean-professional',
+    country: 'US',
+    createdAt: '2026-10-10',
+    updatedAt: '2026-10-10',
+  },
+];
+
 export const INITIAL_SETTINGS: AppSettings = {
   country: 'US',
   plan: 'free',
@@ -418,11 +532,14 @@ export const INITIAL_SETTINGS: AppSettings = {
   currencySymbol: '$',
   invoicePrefix: 'INV-',
   nextInvoiceNumber: 4,
+  quotationPrefix: 'QUO-',
+  nextQuotationNumber: 2,
   defaultNotes: 'Thank you for your business. We look forward to working together again.',
   defaultPaymentTerms: 'Net 14',
-  defaultTemplateId: 'minimal',
+  defaultTemplateId: 'clean-professional',
   driveSync: {
     isConnected: false,
     autoSync: false,
   },
 };
+

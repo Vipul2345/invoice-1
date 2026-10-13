@@ -14,15 +14,23 @@ export type PlanTier = 'free' | 'drive' | 'pro';
 
 export type InvoiceStatus = 'draft' | 'pending' | 'paid' | 'overdue';
 
+export type PricingMode = 'exclusive' | 'inclusive_line' | 'inclusive_unit';
+
 export interface InvoiceItem {
   id: string;
   description: string;
   quantity: number;
-  rate: number;
+  rate: number; // Base taxable unit price before GST/tax
   taxPercent: number;
   discountPercent?: number;
   hsnSac?: string; // India GST specific
-  amount: number;
+  itemCode?: string; // Item code / SKU / Product ID
+  unit?: string; // e.g. 'pcs', 'hrs', 'units', 'kg', 'days'
+  pricingMode?: PricingMode; // 'exclusive' (Mode A) | 'inclusive_line' (Mode B) | 'inclusive_unit'
+  enteredTotal?: number; // Value entered by user when in inclusive pricing mode
+  taxAmount?: number; // Calculated tax amount for the row
+  taxableAmount?: number; // Calculated taxable amount for the row
+  amount: number; // Final line total including tax
 }
 
 export interface Customer {
@@ -81,6 +89,34 @@ export interface Invoice {
   updatedAt: string;
 }
 
+export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+
+export interface Quotation {
+  id: string;
+  quotationNumber: string;
+  customerId: string;
+  customerSnapshot: Customer;
+  date: string;
+  validUntil: string; // Validity/Expiry date
+  currency: string;
+  currencySymbol: string;
+  paymentTerms?: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  totalDiscount: number;
+  totalTax: number;
+  grandTotal: number;
+  notes: string;
+  paymentDetails: BankDetails;
+  status: QuotationStatus;
+  templateId: string;
+  country: CountryCode;
+  convertedInvoiceId?: string; // Prevents duplicate conversion to invoice
+  convertedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CountryConfig {
   code: CountryCode;
   name: string;
@@ -94,6 +130,9 @@ export interface CountryConfig {
 }
 
 export type TemplateStyle = 
+  | 'clean-professional'
+  | 'detailed-business'
+  | 'modern-minimal'
   | 'minimal' 
   | 'modern' 
   | 'corporate' 
@@ -139,6 +178,8 @@ export interface AppSettings {
   currencySymbol: string;
   invoicePrefix: string;
   nextInvoiceNumber: number;
+  quotationPrefix: string;
+  nextQuotationNumber: number;
   defaultNotes: string;
   defaultPaymentTerms: string;
   defaultTemplateId: string;
@@ -151,6 +192,8 @@ export interface ExportDataPayload {
   business: BusinessProfile;
   customers: Customer[];
   invoices: Invoice[];
+  quotations?: Quotation[];
   settings: AppSettings;
   customTemplates: InvoiceTemplate[];
 }
+

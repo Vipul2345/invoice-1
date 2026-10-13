@@ -3,21 +3,23 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Invoice } from '../types';
+import { Invoice, Quotation } from '../types';
 
 export interface GeneratePdfOptions {
-  invoice: Invoice;
+  invoice?: Invoice;
+  quotation?: Quotation;
   elementId?: string;
   onProgress?: (status: string) => void;
 }
 
 /**
- * Generates an A4 PDF from the invoice DOM element and downloads/shares it.
+ * Generates an A4 PDF from a DOM element (Invoice or Quotation) and downloads/shares it.
  * Works seamlessly across Android (Capacitor), mobile web, and desktop.
  */
-export async function downloadInvoicePdf({
+export async function downloadDocumentPdf({
   invoice,
-  elementId = 'invoice-document',
+  quotation,
+  elementId = invoice ? 'invoice-document' : 'quotation-document',
   onProgress,
 }: GeneratePdfOptions): Promise<{ success: boolean; method: string; error?: string }> {
   try {
@@ -25,12 +27,12 @@ export async function downloadInvoicePdf({
 
     const element = document.getElementById(elementId);
     if (!element) {
-      throw new Error(`Invoice element #${elementId} not found`);
+      throw new Error(`Document element #${elementId} not found`);
     }
 
-    onProgress?.('Rendering high-resolution invoice...');
+    onProgress?.('Rendering high-resolution document...');
 
-    // Ensure all images within the invoice are loaded prior to rasterization
+    // Ensure all images within the document are loaded prior to rasterization
     const images = element.getElementsByTagName('img');
     await Promise.all(
       Array.from(images).map((img) => {
@@ -42,8 +44,7 @@ export async function downloadInvoicePdf({
       })
     );
 
-    // A4 width in pixels at standard 96 DPI is ~794px, height is ~1123px.
-    // We clone the document and lock the width to 800px so mobile screens render the full A4 layout.
+    // Lock width to 800px so mobile screens render the full A4 layout cleanly
     const canvas = await html2canvas(element, {
       scale: 2, // 2x retina sharpness for crystal-clear text & lines
       useCORS: true,
@@ -61,7 +62,6 @@ export async function downloadInvoicePdf({
           clonedEl.style.boxShadow = 'none';
           clonedEl.style.margin = '0';
           clonedEl.style.borderRadius = '0';
-          // Ensure all text and elements inside are visible
           clonedEl.classList.remove('shadow-md', 'shadow-xl', 'rounded-lg');
         }
       },
@@ -89,7 +89,7 @@ export async function downloadInvoicePdf({
       // Single page - fit on page
       pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
     } else {
-      // Multi-page handling if invoice is long
+      // Multi-page handling if document is long
       let heightLeft = imgHeight;
       let position = 0;
 
@@ -104,7 +104,10 @@ export async function downloadInvoicePdf({
       }
     }
 
-    const safeFilename = `${invoice.invoiceNumber || 'Invoice'}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const docNumber = invoice?.invoiceNumber || quotation?.quotationNumber || 'Document';
+    const docTypeLabel = quotation ? 'Quotation' : 'Invoice';
+    const safeFilename = `${docNumber}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const customerName = invoice?.customerSnapshot?.name || quotation?.customerSnapshot?.name || 'Customer';
 
     onProgress?.('Saving file...');
 
@@ -121,12 +124,12 @@ export async function downloadInvoicePdf({
           recursive: true,
         });
 
-        // Trigger native Android system sheet (supports Save to Device, Print, Drive, WhatsApp, etc.)
+        // Trigger native Android system sheet
         await Share.share({
           title: safeFilename,
-          text: `Invoice ${invoice.invoiceNumber} for ${invoice.customerSnapshot?.name || 'Customer'}`,
+          text: `${docTypeLabel} ${docNumber} for ${customerName}`,
           url: writeResult.uri,
-          dialogTitle: 'Save or Share Invoice PDF',
+          dialogTitle: `Save or Share ${docTypeLabel} PDF`,
         });
 
         return { success: true, method: 'capacitor-share' };
@@ -135,7 +138,7 @@ export async function downloadInvoicePdf({
       }
     }
 
-    // 2. Mobile Web / Browser supporting Web Share API with files (Android Chrome, etc.)
+    // 2. Mobile Web / Browser supporting Web Share API with files
     const pdfBlob = pdf.output('blob');
     const pdfFile = new File([pdfBlob], safeFilename, { type: 'application/pdf' });
 
@@ -149,7 +152,7 @@ export async function downloadInvoicePdf({
         await navigator.share({
           files: [pdfFile],
           title: safeFilename,
-          text: `Invoice ${invoice.invoiceNumber}`,
+          text: `${docTypeLabel} ${docNumber}`,
         });
         return { success: true, method: 'web-share' };
       } catch (shareErr) {
@@ -182,4 +185,30 @@ export async function downloadInvoicePdf({
       error: error instanceof Error ? error.message : 'Unknown error generating PDF',
     };
   }
+}
+
+/**
+ * Backwards compatible helper for invoices
+ */
+export async function downloadInvoicePdf(
+  options: { invoice: Invoice; elementId?: string; onProgress?: (status: string) => void }
+) {
+  return downloadDocumentPdf({
+    invoice: options.invoice,
+    elementId: options.elementId || 'invoice-document',
+    onProgress: options.onProgress,
+  });
+}
+
+/**
+ * Dedicated helper for quotations
+ */
+export async function downloadQuotationPdf(
+  options: { quotation: Quotation; elementId?: string; onProgress?: (status: string) => void }
+) {
+  return downloadDocumentPdf({
+    quotation: options.quotation,
+    elementId: options.elementId || 'quotation-document',
+    onProgress: options.onProgress,
+  });
 }

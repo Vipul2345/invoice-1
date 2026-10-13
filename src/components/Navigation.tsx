@@ -16,14 +16,16 @@ import {
   LogIn,
   LogOut,
   UserCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'invoices' | 'customers' | 'templates' | 'reports' | 'settings' | 'pricing';
+export type NavTab = 'dashboard' | 'invoices' | 'quotations' | 'customers' | 'templates' | 'reports' | 'settings' | 'pricing';
 
 interface NavigationProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onCreateInvoice: () => void;
+  onCreateQuotation?: () => void;
   currentPlan: PlanTier;
   onUpgradeClick: () => void;
   onOpenAuthModal?: () => void;
@@ -33,6 +35,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   currentTab,
   onTabChange,
   onCreateInvoice,
+  onCreateQuotation,
   currentPlan,
   onUpgradeClick,
   onOpenAuthModal,
@@ -42,6 +45,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   const navItems = [
     { id: 'dashboard' as NavTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'invoices' as NavTab, label: 'Invoices', icon: FileText },
+    { id: 'quotations' as NavTab, label: 'Quotations', icon: FileSpreadsheet },
     { id: 'customers' as NavTab, label: 'Customers', icon: Users },
     { id: 'templates' as NavTab, label: 'Templates', icon: LayoutTemplate },
     { id: 'reports' as NavTab, label: 'Reports', icon: BarChart3 },
@@ -97,7 +101,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
 
         {/* Primary CTA */}
-        <div className="p-4">
+        <div className="p-4 space-y-2">
           <button
             onClick={onCreateInvoice}
             className="w-full py-2.5 px-4 text-xs font-bold text-white bg-neutral-950 hover:bg-neutral-800 rounded-lg shadow-2xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
@@ -105,6 +109,15 @@ export const Navigation: React.FC<NavigationProps> = ({
             <Plus className="w-4 h-4" />
             <span>+ Create Invoice</span>
           </button>
+          {onCreateQuotation && (
+            <button
+              onClick={onCreateQuotation}
+              className="w-full py-1.5 px-3 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-neutral-500" />
+              <span>+ New Quotation</span>
+            </button>
+          )}
         </div>
 
         {/* Navigation Links */}
@@ -233,32 +246,24 @@ export const Navigation: React.FC<NavigationProps> = ({
       </header>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="no-print md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-neutral-200/90 z-30 px-2 py-1.5 flex items-center justify-around shadow-lg">
-        {navItems.slice(0, 5).map((item) => {
+      <nav className="no-print md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-neutral-200/90 z-30 px-1 py-1 flex items-center justify-around shadow-lg">
+        {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
+          const shortLabel = item.id === 'quotations' ? 'Quotes' : item.label;
           return (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${
+              className={`flex flex-col items-center gap-0.5 py-1 px-1 rounded-lg text-[9px] font-medium transition-colors cursor-pointer ${
                 isActive ? 'text-neutral-950 font-bold' : 'text-neutral-400 hover:text-neutral-700'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-neutral-950' : 'text-neutral-400'}`} />
-              <span>{item.label}</span>
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-neutral-950' : 'text-neutral-400'}`} />
+              <span className="truncate">{shortLabel}</span>
             </button>
           );
         })}
-        <button
-          onClick={() => onTabChange('settings')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${
-            currentTab === 'settings' ? 'text-neutral-950 font-bold' : 'text-neutral-400 hover:text-neutral-700'
-          }`}
-        >
-          <Settings className={`w-4 h-4 ${currentTab === 'settings' ? 'text-neutral-950' : 'text-neutral-400'}`} />
-          <span>Settings</span>
-        </button>
       </nav>
     </>
   );

@@ -7,11 +7,13 @@ import {
   ExportDataPayload,
   PlanTier,
   CountryCode,
+  Quotation,
 } from '../types';
 import {
   INITIAL_BUSINESS_PROFILE,
   INITIAL_CUSTOMERS,
   INITIAL_INVOICES,
+  INITIAL_QUOTATIONS,
   INITIAL_SETTINGS,
   DEFAULT_TEMPLATES,
   COUNTRIES,
@@ -21,6 +23,7 @@ const STORAGE_KEYS = {
   BUSINESS: 'invoiceflow_business',
   CUSTOMERS: 'invoiceflow_customers',
   INVOICES: 'invoiceflow_invoices',
+  QUOTATIONS: 'invoiceflow_quotations',
   SETTINGS: 'invoiceflow_settings',
   CUSTOM_TEMPLATES: 'invoiceflow_custom_templates',
   ONBOARDED: 'invoiceflow_onboarded',
@@ -137,9 +140,163 @@ export function duplicateInvoice(id: string): Invoice | null {
   return duplicated;
 }
 
+// Quotations
+export function getQuotations(): Quotation[] {
+  return safeGet<Quotation[]>(STORAGE_KEYS.QUOTATIONS, INITIAL_QUOTATIONS);
+}
+
+export function getQuotationById(id: string): Quotation | undefined {
+  return getQuotations().find((q) => q.id === id);
+}
+
+export function saveQuotation(quotation: Quotation): Quotation {
+  const current = getQuotations();
+  const existingIndex = current.findIndex((q) => q.id === quotation.id);
+  let updated: Quotation[];
+  if (existingIndex >= 0) {
+    updated = [...current];
+    updated[existingIndex] = { ...quotation, updatedAt: new Date().toISOString().split('T')[0] };
+  } else {
+    updated = [{ ...quotation, updatedAt: new Date().toISOString().split('T')[0] }, ...current];
+    // increment next quotation number in settings if it matches current counter
+    const settings = getSettings();
+    const numPart = parseInt(quotation.quotationNumber.replace(/\D/g, ''), 10);
+    if (!isNaN(numPart) && numPart >= settings.nextQuotationNumber) {
+      saveSettings({ ...settings, nextQuotationNumber: numPart + 1 });
+    }
+  }
+  safeSet(STORAGE_KEYS.QUOTATIONS, updated);
+  return quotation;
+}
+
+export function deleteQuotation(id: string): void {
+  const current = getQuotations();
+  safeSet(STORAGE_KEYS.QUOTATIONS, current.filter((q) => q.id !== id));
+}
+
+export function duplicateQuotation(id: string): Quotation | null {
+  const target = getQuotationById(id);
+  if (!target) return null;
+  const settings = getSettings();
+  const nextNum = settings.nextQuotationNumber;
+  const newNumStr = `${settings.quotationPrefix}${String(nextNum).padStart(4, '0')}`;
+
+  const duplicated: Quotation = {
+    ...target,
+    id: `quo-${Date.now()}`,
+    quotationNumber: newNumStr,
+    status: 'draft',
+    date: new Date().toISOString().split('T')[0],
+    validUntil: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+    convertedInvoiceId: undefined,
+    convertedAt: undefined,
+    createdAt: new Date().toISOString().split('T')[0],
+    updatedAt: new Date().toISOString().split('T')[0],
+  };
+
+  saveQuotation(duplicated);
+  saveSettings({ ...settings, nextQuotationNumber: nextNum + 1 });
+  return duplicated;
+}
+
+/**
+ * Converts an existing quotation into a new official invoice.
+ * - Checks for prior conversion to prevent duplicate invoice generation
+ * - Generates unique invoice number using current sequence
+ * - Copies items, customer, terms, tax breakdown, and notes
+ * - Preserves original quotation and marks it as accepted + converted
+ * - Never reuses the quotation ID as the invoice ID
+ */
+export function convertQuotationToInvoice(quotationId: string): {
+  success: boolean;
+  invoice?: Invoice;
+  error?: string;
+} {
+  const quotation = getQuotationById(quotationId);
+  if (!quotation) {
+    return { success: false, error: 'Quotation not found.' };
+  }
+
+  // Prevent accidental duplicate conversion
+  if (quotation.convertedInvoiceId) {
+    const existingInv = getInvoiceById(quotation.convertedInvoiceId);
+    return {
+      success: false,
+      invoice: existingInv,
+      error: `This quotation was already converted to invoice ${existingInv?.invoiceNumber || quotation.convertedInvoiceId}.`,
+    };
+  }
+
+  const settings = getSettings();
+  const nextNum = settings.nextInvoiceNumber;
+  const newInvoiceNumber = `${settings.invoicePrefix}${String(nextNum).padStart(4, '0')}`;
+
+  // Deep clone line items to prevent linked mutation
+  const copiedItems = quotation.items.map((it, idx) => ({
+    ...it,
+    id: `item-${Date.now()}-${idx + 1}`,
+  }));
+
+  const issueDate = new Date().toISOString().split('T')[0];
+  let daysToAdd = 14;
+  if (quotation.paymentTerms === 'Due on Receipt') daysToAdd = 0;
+  else if (quotation.paymentTerms === 'Net 7') daysToAdd = 7;
+  else if (quotation.paymentTerms === 'Net 14') daysToAdd = 14;
+  else if (quotation.paymentTerms === 'Net 30') daysToAdd = 30;
+  else if (quotation.paymentTerms === 'Net 60') daysToAdd = 60;
+
+  const dueDate = new Date(Date.now() + daysToAdd * 86400000).toISOString().split('T')[0];
+
+  const newInvoice: Invoice = {
+    id: `inv-${Date.now()}`,
+    invoiceNumber: newInvoiceNumber,
+    customerId: quotation.customerId,
+    customerSnapshot: { ...quotation.customerSnapshot },
+    date: issueDate,
+    dueDate,
+    currency: quotation.currency,
+    currencySymbol: quotation.currencySymbol,
+    paymentTerms: quotation.paymentTerms || settings.defaultPaymentTerms || 'Net 14',
+    items: copiedItems,
+    subtotal: quotation.subtotal,
+    totalDiscount: quotation.totalDiscount,
+    totalTax: quotation.totalTax,
+    grandTotal: quotation.grandTotal,
+    notes: quotation.notes || settings.defaultNotes,
+    paymentDetails: { ...quotation.paymentDetails },
+    status: 'pending',
+    templateId: quotation.templateId || settings.defaultTemplateId || 'clean-professional',
+    country: quotation.country,
+    createdAt: issueDate,
+    updatedAt: issueDate,
+  };
+
+  // Save the new invoice
+  saveInvoice(newInvoice);
+
+  // Update quotation history and link
+  const updatedQuotation: Quotation = {
+    ...quotation,
+    status: 'accepted',
+    convertedInvoiceId: newInvoice.id,
+    convertedAt: new Date().toISOString(),
+    updatedAt: issueDate,
+  };
+  saveQuotation(updatedQuotation);
+
+  return { success: true, invoice: newInvoice };
+}
+
 // Settings
 export function getSettings(): AppSettings {
-  return safeGet<AppSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+  const loaded = safeGet<AppSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+  return {
+    ...INITIAL_SETTINGS,
+    ...loaded,
+    quotationPrefix: loaded.quotationPrefix || 'QUO-',
+    nextQuotationNumber: loaded.nextQuotationNumber || 1,
+    defaultTemplateId: loaded.defaultTemplateId || 'clean-professional',
+  };
 }
 
 export function saveSettings(settings: AppSettings): void {
@@ -198,11 +355,12 @@ export function setOnboarded(value: boolean): void {
 // JSON Backup Export and Import
 export function generateExportPayload(): ExportDataPayload {
   return {
-    version: '1.0.0',
+    version: '1.1.0',
     exportedAt: new Date().toISOString(),
     business: getBusinessProfile(),
     customers: getCustomers(),
     invoices: getInvoices(),
+    quotations: getQuotations(),
     settings: getSettings(),
     customTemplates: safeGet<InvoiceTemplate[]>(STORAGE_KEYS.CUSTOM_TEMPLATES, []),
   };
@@ -230,8 +388,34 @@ export function importBackupPayload(payload: ExportDataPayload): boolean {
     }
     safeSet(STORAGE_KEYS.BUSINESS, payload.business);
     safeSet(STORAGE_KEYS.CUSTOMERS, payload.customers || []);
-    safeSet(STORAGE_KEYS.INVOICES, payload.invoices || []);
-    safeSet(STORAGE_KEYS.SETTINGS, payload.settings);
+    
+    // Ensure invoices have safe default pricingMode for older documents
+    const sanitizedInvoices = (payload.invoices || []).map((inv) => ({
+      ...inv,
+      items: (inv.items || []).map((item) => ({
+        ...item,
+        pricingMode: item.pricingMode || 'exclusive',
+      })),
+    }));
+    safeSet(STORAGE_KEYS.INVOICES, sanitizedInvoices);
+
+    // Support imported quotations or safe fallback
+    const sanitizedQuotations = (payload.quotations || []).map((quo) => ({
+      ...quo,
+      items: (quo.items || []).map((item) => ({
+        ...item,
+        pricingMode: item.pricingMode || 'exclusive',
+      })),
+    }));
+    safeSet(STORAGE_KEYS.QUOTATIONS, sanitizedQuotations);
+
+    safeSet(STORAGE_KEYS.SETTINGS, {
+      ...INITIAL_SETTINGS,
+      ...payload.settings,
+      quotationPrefix: payload.settings.quotationPrefix || 'QUO-',
+      nextQuotationNumber: payload.settings.nextQuotationNumber || 1,
+    });
+
     if (payload.customTemplates) {
       safeSet(STORAGE_KEYS.CUSTOM_TEMPLATES, payload.customTemplates);
     }
@@ -247,6 +431,7 @@ export function resetToDemoData(): void {
   safeSet(STORAGE_KEYS.BUSINESS, INITIAL_BUSINESS_PROFILE);
   safeSet(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
   safeSet(STORAGE_KEYS.INVOICES, INITIAL_INVOICES);
+  safeSet(STORAGE_KEYS.QUOTATIONS, INITIAL_QUOTATIONS);
   safeSet(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
   safeSet(STORAGE_KEYS.CUSTOM_TEMPLATES, []);
   safeSet(STORAGE_KEYS.ONBOARDED, true);
@@ -263,6 +448,7 @@ export function clearAllLocalData(): void {
   });
   safeSet(STORAGE_KEYS.CUSTOMERS, []);
   safeSet(STORAGE_KEYS.INVOICES, []);
+  safeSet(STORAGE_KEYS.QUOTATIONS, []);
   safeSet(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
   safeSet(STORAGE_KEYS.CUSTOM_TEMPLATES, []);
 }
