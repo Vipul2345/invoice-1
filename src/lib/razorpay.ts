@@ -41,7 +41,12 @@ export const RAZORPAY_PLANS: Record<'drive' | 'pro', RazorpayPlanDetails> = {
 };
 
 export const getRazorpayKey = (): string => {
-  return import.meta.env.VITE_RAZORPAY_KEY_ID || '';
+  return (
+    import.meta.env.VITE_RAZORPAY_KEY_ID ||
+    import.meta.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+    import.meta.env.RAZORPAY_KEY_ID ||
+    ''
+  );
 };
 
 export const isRazorpayConfigured = (): boolean => {
