@@ -4,6 +4,7 @@ import { saveCustomTemplate, deleteCustomTemplate, saveBusinessProfile } from '.
 import { InvoicePreview } from './InvoicePreview';
 import { LogoUploader } from './LogoUploader';
 import { showToast } from './ToastNotification';
+import { ErrorBoundary } from './ErrorBoundary';
 import {
   Crown,
   Check,
@@ -865,12 +866,14 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
               </span>
             </div>
             <div className="overflow-x-auto rounded-lg shadow-sm bg-white">
-              <InvoicePreview
-                invoice={sampleInvoice}
-                business={business}
-                template={liveCustomTemplate}
-                plan={currentPlan}
-              />
+              <ErrorBoundary fallbackTitle="Custom Template Live Preview">
+                <InvoicePreview
+                  invoice={sampleInvoice}
+                  business={business}
+                  template={liveCustomTemplate}
+                  plan={currentPlan}
+                />
+              </ErrorBoundary>
             </div>
           </div>
         </div>

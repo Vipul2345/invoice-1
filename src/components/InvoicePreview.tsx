@@ -147,6 +147,7 @@ View or pay according to invoice instructions.`;
     : (isCleanProfessional ? '#15803d' : '#0f172a');
 
   // Custom component toggles
+  const showLogo = isCustom ? (template.config.showLogo !== false) : (template.config.showLogo !== false);
   const showBusinessDetails = isCustom ? (template.config.showBusinessDetails !== false) : true;
   const showCustomerDetails = isCustom ? (template.config.showCustomerDetails !== false) : true;
   const showDocTitle = isCustom ? (template.config.showDocTitle !== false) : true;
@@ -172,7 +173,7 @@ View or pay according to invoice instructions.`;
       ? 'font-mono'
       : 'font-sans';
 
-  const shouldShowLogo = template.config.showLogo !== false && !!business.logoUrl;
+  const shouldShowLogo = showLogo && !!business.logoUrl;
   const logoPosition = template.config.logoPosition || 'left';
   const logoSize = template.config.logoSize || 'medium';
   const logoSizeClass =
