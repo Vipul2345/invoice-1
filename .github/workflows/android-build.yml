@@ -27,8 +27,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci --legacy-peer-deps
-          npm install --no-save --force @rolldown/binding-linux-x64-gnu@1.2.13
+          rm -f package-lock.json
+          npm install --legacy-peer-deps
+          npm install --no-save --force @rolldown/binding-linux-x64-gnu@1.2.13 lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu @esbuild/linux-x64
 
       - name: Set up Java
         uses: actions/setup-java@v4
