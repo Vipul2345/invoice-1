@@ -11,7 +11,7 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import { PlanTier, UserSubscription } from '../types';
-import { setPlanTier, setDrivePermission } from '../lib/storage';
+import { setPlanTier, setDrivePermission, mockDisconnectDrive } from '../lib/storage';
 import { DEMO_PRO_CREDENTIALS } from '../lib/constants';
 import { performDailyCloudSync, CloudSyncResult } from '../lib/cloudSync';
 
@@ -39,7 +39,16 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   quickLoginAsPro: () => Promise<void>;
-  updateSubscription: (plan: PlanTier, drivePermissionGranted?: boolean) => Promise<void>;
+  updateSubscription: (
+    plan: PlanTier,
+    drivePermissionGranted?: boolean,
+    paymentMeta?: {
+      razorpayPaymentId?: string;
+      razorpaySubscriptionId?: string;
+      autoRenew?: boolean;
+    }
+  ) => Promise<void>;
+  cancelSubscription: () => Promise<void>;
   grantDrivePermission: () => Promise<void>;
   syncDailyCloudBackup: (force?: boolean) => Promise<CloudSyncResult | null>;
 }
@@ -64,9 +73,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (data.subscription) {
           const sub = data.subscription as UserSubscription;
-          setSubscription(sub);
-          if (sub.drivePermissionGranted) {
-            setDrivePermission(true);
+          const hasExpired = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) < new Date() : false;
+          const isActive = sub.status === 'active' && !hasExpired;
+          const isEligibleTier = sub.plan === 'drive' || sub.plan === 'pro';
+
+          if (!isActive || !isEligibleTier) {
+            // Subscription is cancelled, expired, or non-drive:
+            // Immediately disconnect Google Drive and revoke cloud permissions
+            mockDisconnectDrive();
+            setDrivePermission(false);
+            setUserPlan('free');
+            setPlanTier('free');
+
+            const updatedSub: UserSubscription = {
+              ...sub,
+              status: hasExpired ? 'expired' : sub.status === 'active' ? 'canceled' : sub.status,
+              drivePermissionGranted: false,
+              cloudBackupEnabled: false,
+              updatedAt: new Date().toISOString(),
+            };
+            setSubscription(updatedSub);
+
+            if (hasExpired && sub.status === 'active') {
+              await setDoc(userRef, {
+                plan: 'free',
+                subscription: updatedSub,
+              }, { merge: true });
+            }
+          } else {
+            setUserPlan(sub.plan);
+            setPlanTier(sub.plan);
+            setSubscription(sub);
+            if (sub.plan === 'drive' && sub.drivePermissionGranted) {
+              setDrivePermission(true);
+            } else {
+              setDrivePermission(false);
+            }
           }
         } else {
           // Backfill subscription data in Firestore if missing
@@ -274,18 +316,94 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateSubscription = async (plan: PlanTier, drivePermissionGranted?: boolean) => {
+  const cancelSubscription = async () => {
+    // 1. Immediately disconnect local drive connection & revoke permissions
+    mockDisconnectDrive();
+    setDrivePermission(false);
+    setUserPlan('free');
+    setPlanTier('free');
+
+    const cancelledSub: UserSubscription = {
+      ...(subscription || {
+        plan: 'free',
+        planName: 'Free Plan',
+        updatedAt: new Date().toISOString(),
+      }),
+      plan: 'free',
+      planName: 'Free Plan',
+      status: 'canceled',
+      cancelledAt: new Date().toISOString(),
+      autoRenew: false,
+      drivePermissionGranted: false,
+      cloudBackupEnabled: false,
+      updatedAt: new Date().toISOString(),
+    };
+    setSubscription(cancelledSub);
+
+    // 2. Persist cancellation to Firestore
+    if (auth.currentUser) {
+      try {
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        await setDoc(
+          userRef,
+          {
+            plan: 'free',
+            subscription: cancelledSub,
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.warn('Failed to update cancelled subscription in Firestore:', err);
+      }
+    }
+
+    // Also update mock user if in demo mode
+    try {
+      const savedMock = localStorage.getItem('invoiceflow_mock_user');
+      if (savedMock) {
+        const parsed = JSON.parse(savedMock);
+        parsed.plan = 'free';
+        parsed.subscription = cancelledSub;
+        localStorage.setItem('invoiceflow_mock_user', JSON.stringify(parsed));
+      }
+    } catch (e) {}
+  };
+
+  const updateSubscription = async (
+    plan: PlanTier,
+    drivePermissionGranted?: boolean,
+    paymentMeta?: {
+      razorpayPaymentId?: string;
+      razorpaySubscriptionId?: string;
+      autoRenew?: boolean;
+    }
+  ) => {
+    if (plan === 'free') {
+      await cancelSubscription();
+      return;
+    }
+
     const isDriveGranted = drivePermissionGranted !== undefined
       ? drivePermissionGranted
-      : (subscription?.drivePermissionGranted || false);
+      : (subscription?.drivePermissionGranted || (plan === 'drive'));
+
+    const now = new Date();
+    const currentPeriodStart = now.toISOString();
+    // 30 days active period for monthly recurring subscription
+    const currentPeriodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const sub: UserSubscription = {
       plan,
       planName: getPlanDisplayName(plan),
       status: 'active',
-      updatedAt: new Date().toISOString(),
-      drivePermissionGranted: plan === 'drive' ? isDriveGranted : undefined,
+      updatedAt: currentPeriodStart,
+      drivePermissionGranted: plan === 'drive' ? isDriveGranted : false,
       cloudBackupEnabled: plan === 'pro',
+      razorpayPaymentId: paymentMeta?.razorpayPaymentId || subscription?.razorpayPaymentId,
+      razorpaySubscriptionId: paymentMeta?.razorpaySubscriptionId || subscription?.razorpaySubscriptionId,
+      currentPeriodStart,
+      currentPeriodEnd,
+      autoRenew: paymentMeta?.autoRenew !== undefined ? paymentMeta.autoRenew : true,
     };
 
     setUserPlan(plan);
@@ -294,6 +412,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (plan === 'drive') {
       setDrivePermission(isDriveGranted);
+    } else {
+      setDrivePermission(false);
+      mockDisconnectDrive();
     }
 
     if (auth.currentUser) {
@@ -455,6 +576,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshUserProfile,
         quickLoginAsPro,
         updateSubscription,
+        cancelSubscription,
         grantDrivePermission,
         syncDailyCloudBackup,
       }}

@@ -2,8 +2,28 @@ import React, { useState } from 'react';
 import { PlanTier, CountryCode } from '../types';
 import { COUNTRIES } from '../lib/constants';
 import { useAuth } from '../context/AuthContext';
-import { Check, Crown, Cloud, HardDrive, MapPin, Globe, Sparkles, ShieldCheck, ShieldAlert, FileText, RotateCcw, AlertTriangle, Lock, Clock, LogIn } from 'lucide-react';
+import {
+  Check,
+  Crown,
+  Cloud,
+  HardDrive,
+  MapPin,
+  Globe,
+  Sparkles,
+  ShieldCheck,
+  ShieldAlert,
+  FileText,
+  RotateCcw,
+  AlertTriangle,
+  Lock,
+  Clock,
+  LogIn,
+  CreditCard,
+  RefreshCw,
+} from 'lucide-react';
 import { LegalDocType } from './LegalDocumentViewer';
+import { initiateRazorpayPayment, isRazorpayConfigured } from '../lib/razorpay';
+import { showToast } from './ToastNotification';
 
 interface PricingViewProps {
   currentPlan: PlanTier;
@@ -22,19 +42,28 @@ export const PricingView: React.FC<PricingViewProps> = ({
   onOpenLegalDoc,
   onRequestAuth,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateSubscription, cancelSubscription } = useAuth();
   const [selectedPlanNotice, setSelectedPlanNotice] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState<string | null>(null);
 
   const isIndia = country === 'IN';
   const currentCountryConfig = COUNTRIES[country] || COUNTRIES.OTHER;
 
-  const handleFreeSelect = () => {
+  const handleFreeSelect = async () => {
+    if (currentPlan !== 'free') {
+      const confirmCancel = window.confirm(
+        'Switch to Free Plan? Your Google Drive sync connection and cloud backup will be disconnected immediately.'
+      );
+      if (!confirmCancel) return;
+      await cancelSubscription();
+    }
     onSelectPlan('free');
     setSelectedPlanNotice('Free Plan active: 100% offline local storage.');
+    showToast('Switched to Free Plan. Drive sync has been disconnected.', 'info');
     setTimeout(() => setSelectedPlanNotice(null), 4000);
   };
 
-  const handlePaidSelect = (plan: 'drive' | 'pro') => {
+  const handlePaidSelect = async (plan: 'drive' | 'pro') => {
     if (!currentUser) {
       if (onRequestAuth) {
         onRequestAuth(plan);
@@ -44,13 +73,48 @@ export const PricingView: React.FC<PricingViewProps> = ({
       return;
     }
 
-    onSelectPlan(plan);
-    setSelectedPlanNotice(
-      plan === 'pro'
-        ? '✓ Pro Gold Program activated! Enjoy 100% ad-free & watermark-free exports.'
-        : '✓ Drive Plan selected! Connect Google Drive to enable automated cloud backups.'
-    );
-    setTimeout(() => setSelectedPlanNotice(null), 4000);
+    if (currentPlan === plan) {
+      return;
+    }
+
+    setIsProcessingPayment(plan);
+    try {
+      const result = await initiateRazorpayPayment({
+        plan,
+        user: {
+          uid: currentUser.uid,
+          email: currentUser.email || 'user@invoiceflow.com',
+          displayName: currentUser.displayName || undefined,
+        },
+        isIndia,
+      });
+
+      if (!result.success) {
+        if (result.message) {
+          showToast(result.message, 'info');
+        }
+        return;
+      }
+
+      await updateSubscription(plan, plan === 'drive', {
+        razorpayPaymentId: result.paymentId,
+        razorpaySubscriptionId: result.subscriptionId,
+        autoRenew: true,
+      });
+
+      onSelectPlan(plan);
+      const msg = plan === 'pro'
+        ? '✓ Payment Approved! Pro Gold Program activated with monthly Autopay.'
+        : '✓ Payment Approved! Drive Plan activated with monthly Autopay. Cloud sync enabled.';
+      setSelectedPlanNotice(msg);
+      showToast(msg, 'success');
+      setTimeout(() => setSelectedPlanNotice(null), 5000);
+    } catch (err: any) {
+      console.error('Payment error:', err);
+      showToast(`Payment failed: ${err.message || 'Transaction could not be completed.'}`, 'error');
+    } finally {
+      setIsProcessingPayment(null);
+    }
   };
 
   return (

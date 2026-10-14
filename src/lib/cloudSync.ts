@@ -9,6 +9,9 @@ import {
   getSettings,
   getAllTemplates,
   saveSettings,
+  mockDisconnectDrive,
+  setDrivePermission,
+  setPlanTier,
 } from './storage';
 
 export interface CloudSyncResult {
@@ -27,6 +30,8 @@ export interface CloudSyncResult {
  * Verifies subscription status against Firebase Firestore.
  * This is the authoritative backend API check that guarantees
  * cloud sync operations only proceed if the subscription is active.
+ * If the subscription has been cancelled, expired, or downgraded,
+ * it immediately revokes local Drive sync and blocks cloud sync.
  */
 export async function verifySubscriptionFromFirebase(userId: string): Promise<UserSubscription> {
   if (!userId) {
@@ -44,21 +49,45 @@ export async function verifySubscriptionFromFirebase(userId: string): Promise<Us
   const sub = data.subscription as UserSubscription | undefined;
 
   if (!sub) {
-    throw new Error('SUBSCRIPTION_INACTIVE: No subscription plan record found for this account.');
+    mockDisconnectDrive();
+    setDrivePermission(false);
+    setPlanTier('free');
+    throw new Error('SUBSCRIPTION_INACTIVE: No subscription plan record found. Drive sync has been disconnected.');
+  }
+
+  // Check if monthly subscription period has expired
+  if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) {
+    mockDisconnectDrive();
+    setDrivePermission(false);
+    setPlanTier('free');
+    await setDoc(userRef, {
+      plan: 'free',
+      'subscription.status': 'expired',
+      'subscription.drivePermissionGranted': false,
+      'subscription.cloudBackupEnabled': false,
+      'subscription.updatedAt': new Date().toISOString(),
+    }, { merge: true });
+    throw new Error('SUBSCRIPTION_EXPIRED: Your monthly subscription period has expired. Drive sync has been disconnected.');
   }
 
   // Verify status is strictly active
   if (sub.status !== 'active') {
+    mockDisconnectDrive();
+    setDrivePermission(false);
+    setPlanTier('free');
     throw new Error(
-      `SUBSCRIPTION_INACTIVE: Subscription status is "${sub.status}". Active subscription required for cloud sync.`
+      `SUBSCRIPTION_INACTIVE: Subscription status is "${sub.status}". Drive sync and cloud backup have been disconnected.`
     );
   }
 
   // Verify plan is Drive Plan or Pro Gold Program
   const plan = sub.plan as PlanTier;
   if (plan !== 'drive' && plan !== 'pro') {
+    mockDisconnectDrive();
+    setDrivePermission(false);
+    setPlanTier('free');
     throw new Error(
-      `SUBSCRIPTION_INACTIVE: Current tier (${plan.toUpperCase()}) does not include cloud sync. Upgrade to Drive Plan or Pro Gold Program.`
+      `SUBSCRIPTION_INACTIVE: Current tier (${plan.toUpperCase()}) does not include cloud sync. Drive sync connection revoked.`
     );
   }
 

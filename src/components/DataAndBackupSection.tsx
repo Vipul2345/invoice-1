@@ -46,7 +46,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
   onLearnMoreLegal,
   onRequestAuth,
 }) => {
-  const { currentUser, subscription, syncDailyCloudBackup } = useAuth();
+  const { currentUser, subscription, syncDailyCloudBackup, cancelSubscription } = useAuth();
   const [exportNotice, setExportNotice] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
@@ -55,6 +55,21 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
   // Import preview modal state
   const [importCandidate, setImportCandidate] = useState<ExportDataPayload | null>(null);
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
+
+  const handleCancelSubscription = async () => {
+    const confirmCancel = window.confirm(
+      'Are you sure you want to cancel your subscription? Your Google Drive sync connection and cloud backup will be disconnected immediately and your plan downgraded to Free.'
+    );
+    if (!confirmCancel) return;
+    try {
+      await cancelSubscription();
+      showToast('Subscription cancelled. Google Drive sync has been disconnected.', 'info');
+      onSettingsUpdated(getSettings());
+      onDataResetOrCleared();
+    } catch (err: any) {
+      showToast(`Cancellation error: ${err.message}`, 'error');
+    }
+  };
 
   const handleTestCloudSync = async () => {
     if (!currentUser) {
@@ -427,15 +442,26 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
                   <span>Sign In with Google</span>
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleTestCloudSync}
-                  disabled={isSyncingCloud}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingCloud ? 'Verifying & Syncing...' : 'Test Cloud Sync Now'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {subscription?.status === 'active' && (subscription.plan === 'drive' || subscription.plan === 'pro') && (
+                    <button
+                      type="button"
+                      onClick={handleCancelSubscription}
+                      className="px-3 py-1.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer text-xs"
+                    >
+                      Cancel Subscription
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleTestCloudSync}
+                    disabled={isSyncingCloud}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingCloud ? 'Verifying & Syncing...' : 'Test Cloud Sync Now'}</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -458,7 +484,15 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
           </div>
 
           <div>
-            {plan === 'drive' ? (
+            {subscription?.status === 'canceled' ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-md">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Cancelled · Sync Revoked
+              </span>
+            ) : subscription?.status === 'expired' ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-md">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Expired · Sync Revoked
+              </span>
+            ) : plan === 'drive' ? (
               settings.driveSync?.permissionGranted ? (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Permission Granted

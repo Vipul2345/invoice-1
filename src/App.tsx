@@ -112,6 +112,7 @@ export default function App() {
       } catch (err: any) {
         if (!isMounted) return;
         console.error('Firebase Cloud Sync on Software Startup:', err);
+        reloadData();
         if (settings.plan === 'drive' || settings.plan === 'pro') {
           showToast(`⚠️ Cloud Sync Blocked: ${err.message || 'Subscription check failed.'}`, 'error');
         }

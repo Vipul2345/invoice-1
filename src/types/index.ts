@@ -181,10 +181,17 @@ export interface InvoiceTemplate {
 export interface UserSubscription {
   plan: PlanTier;
   planName: string; // 'Free Plan' | 'Drive Plan' | 'Pro Gold Program'
-  status: 'active' | 'trial' | 'canceled';
+  status: 'active' | 'trial' | 'canceled' | 'expired';
   updatedAt: string;
   drivePermissionGranted?: boolean;
   cloudBackupEnabled?: boolean;
+  // Razorpay payment & Autopay details
+  razorpayPaymentId?: string;
+  razorpaySubscriptionId?: string;
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  autoRenew?: boolean;
+  cancelledAt?: string;
 }
 
 export interface DriveSyncState {
