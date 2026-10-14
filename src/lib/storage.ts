@@ -580,6 +580,17 @@ export function mockTriggerDriveBackup(): void {
   });
 }
 
+export function setDrivePermission(granted: boolean): void {
+  const current = getSettings();
+  saveSettings({
+    ...current,
+    driveSync: {
+      ...current.driveSync,
+      permissionGranted: granted,
+    },
+  });
+}
+
 // Currency formatting helpers
 export function formatCurrency(amount: number, currency = 'USD', symbol = '$'): string {
   const formatted = amount.toLocaleString('en-US', {

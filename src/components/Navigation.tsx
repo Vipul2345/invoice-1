@@ -57,7 +57,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       case 'pro':
         return (
           <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
-            <Crown className="w-3 h-3 fill-amber-500 text-amber-500" /> Pro Cloud
+            <Crown className="w-3 h-3 fill-amber-500 text-amber-500" /> Pro Gold
           </span>
         );
       case 'drive':

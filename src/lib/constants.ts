@@ -319,6 +319,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   driveSync: {
     isConnected: false,
     autoSync: false,
+    permissionGranted: false,
   },
 };
 

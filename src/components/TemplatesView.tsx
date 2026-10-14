@@ -318,7 +318,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                 Unlock Custom Template Builder & Pro Templates
               </h3>
               <p className="text-xs text-neutral-300 mt-0.5">
-                Pro plan includes clean multi-component customization, company branding, and zero watermarks.
+                Pro Gold Program includes clean multi-component customization, company branding, 100% ad-free experience, and zero watermarks.
               </p>
             </div>
           </div>
@@ -326,7 +326,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
             onClick={onGoToPricing}
             className="px-4 py-2 text-xs font-bold text-neutral-900 bg-white hover:bg-neutral-100 rounded-lg shrink-0 transition-colors cursor-pointer"
           >
-            Upgrade to Pro ({sampleInvoice.country === 'IN' ? '₹99/mo' : '$4.99/mo'})
+            Upgrade to Pro Gold ({sampleInvoice.country === 'IN' ? '₹99/mo' : '$4.99/mo'})
           </button>
         </div>
       )}

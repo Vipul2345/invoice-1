@@ -84,9 +84,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             </div>
             <div className="text-[11px] text-neutral-600 font-mono">
               {isIndia ? (
-                <span>Free: ₹0 · Drive Plan: ₹49/mo · Pro Cloud: ₹99/mo</span>
+                <span>Free: ₹0 · Drive Plan: ₹49/mo · Pro Gold: ₹99/mo</span>
               ) : (
-                <span>Free: $0 · Drive Plan: $2.99/mo · Pro Cloud: $4.99/mo</span>
+                <span>Free: $0 · Drive Plan: $2.99/mo · Pro Gold: $4.99/mo</span>
               )}
             </div>
           </div>

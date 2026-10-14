@@ -334,7 +334,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-neutral-400">
-                {plan === 'free' ? 'Local-first / Watermarked' : plan === 'drive' ? 'Drive Backup Active' : 'Pro Unbranded'}
+                {plan === 'free' ? 'Local-first / Watermarked & Ads' : plan === 'drive' ? 'Drive Backup / Watermarked & Ads' : 'Pro Gold / Unbranded & Ad-Free'}
               </div>
             </div>
           </div>
@@ -778,7 +778,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100'
                     }`}
                   >
-                    Pro Cloud Plan ({settings.country === 'IN' ? '₹99/mo' : '$4.99/mo'})
+                    Pro Gold Program ({settings.country === 'IN' ? '₹99/mo' : '$4.99/mo'})
                   </button>
                 </div>
               </div>

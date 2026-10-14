@@ -52,12 +52,14 @@ import { BackupReminderBanner } from './components/BackupReminderBanner';
 import { LegalDocType } from './components/LegalDocumentViewer';
 import { AuthModal } from './components/AuthModal';
 import { ToastNotificationContainer, showToast } from './components/ToastNotification';
+import { AdBanner } from './components/AdBanner';
+import { DrivePermissionModal } from './components/DrivePermissionModal';
 import { useAuth } from './context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 
 export default function App() {
-  const { currentUser } = useAuth();
+  const { currentUser, updateSubscription } = useAuth();
 
   // Navigation & View States
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
@@ -83,6 +85,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState<boolean>(!isOnboarded());
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authTargetPlan, setAuthTargetPlan] = useState<string | undefined>();
+  const [showDrivePermissionModal, setShowDrivePermissionModal] = useState(false);
 
   // Reload data from local storage
   const reloadData = () => {
@@ -330,11 +333,17 @@ export default function App() {
     showToast('Invoice template updated!', 'info');
   };
 
-  const handlePlanChange = (plan: PlanTier) => {
+  const handlePlanChange = async (plan: PlanTier) => {
     setPlanTier(plan);
     setSettings((prev) => ({ ...prev, plan }));
+    await updateSubscription(plan);
     reloadData();
-    showToast(`Active plan set to ${plan.toUpperCase()}`, 'info');
+    const label = plan === 'pro' ? 'PRO GOLD PROGRAM' : plan === 'drive' ? 'DRIVE PLAN' : 'FREE PLAN';
+    showToast(`Active plan set to ${label}`, 'info');
+
+    if (plan === 'drive' && !settings.driveSync?.permissionGranted) {
+      setShowDrivePermissionModal(true);
+    }
   };
 
   const handleCountryChange = (country: CountryCode) => {
@@ -555,44 +564,53 @@ export default function App() {
             /* Normal Tabbed Views */
             <>
               {currentTab === 'dashboard' && (
-                <DashboardView
-                  invoices={invoices}
-                  settings={settings}
-                  business={business}
-                  plan={settings.plan}
-                  onCreateInvoice={handleStartCreateInvoice}
-                  onViewInvoice={handleViewInvoice}
-                  onEditInvoice={handleStartEditInvoice}
-                  onDuplicateInvoice={handleDuplicateInvoice}
-                  onDeleteInvoice={handleDeleteInvoice}
-                  onGoToInvoices={() => setCurrentTab('invoices')}
-                  onGoToPricing={() => setCurrentTab('pricing')}
-                />
+                <>
+                  <DashboardView
+                    invoices={invoices}
+                    settings={settings}
+                    business={business}
+                    plan={settings.plan}
+                    onCreateInvoice={handleStartCreateInvoice}
+                    onViewInvoice={handleViewInvoice}
+                    onEditInvoice={handleStartEditInvoice}
+                    onDuplicateInvoice={handleDuplicateInvoice}
+                    onDeleteInvoice={handleDeleteInvoice}
+                    onGoToInvoices={() => setCurrentTab('invoices')}
+                    onGoToPricing={() => setCurrentTab('pricing')}
+                  />
+                  <AdBanner plan={settings.plan} onUpgradeClick={() => setCurrentTab('pricing')} />
+                </>
               )}
 
               {currentTab === 'invoices' && (
-                <InvoicesListView
-                  invoices={invoices}
-                  settings={settings}
-                  onCreateInvoice={handleStartCreateInvoice}
-                  onViewInvoice={handleViewInvoice}
-                  onEditInvoice={handleStartEditInvoice}
-                  onDuplicateInvoice={handleDuplicateInvoice}
-                  onDeleteInvoice={handleDeleteInvoice}
-                />
+                <>
+                  <InvoicesListView
+                    invoices={invoices}
+                    settings={settings}
+                    onCreateInvoice={handleStartCreateInvoice}
+                    onViewInvoice={handleViewInvoice}
+                    onEditInvoice={handleStartEditInvoice}
+                    onDuplicateInvoice={handleDuplicateInvoice}
+                    onDeleteInvoice={handleDeleteInvoice}
+                  />
+                  <AdBanner plan={settings.plan} onUpgradeClick={() => setCurrentTab('pricing')} />
+                </>
               )}
 
               {currentTab === 'quotations' && (
-                <QuotationsListView
-                  quotations={quotations}
-                  settings={settings}
-                  onCreateQuotation={handleStartCreateQuotation}
-                  onViewQuotation={handleViewQuotation}
-                  onEditQuotation={handleStartEditQuotation}
-                  onDuplicateQuotation={handleDuplicateQuotation}
-                  onDeleteQuotation={handleDeleteQuotation}
-                  onConvertToInvoice={handleConvertQuotationToInvoice}
-                />
+                <>
+                  <QuotationsListView
+                    quotations={quotations}
+                    settings={settings}
+                    onCreateQuotation={handleStartCreateQuotation}
+                    onViewQuotation={handleViewQuotation}
+                    onEditQuotation={handleStartEditQuotation}
+                    onDuplicateQuotation={handleDuplicateQuotation}
+                    onDeleteQuotation={handleDeleteQuotation}
+                    onConvertToInvoice={handleConvertQuotationToInvoice}
+                  />
+                  <AdBanner plan={settings.plan} onUpgradeClick={() => setCurrentTab('pricing')} />
+                </>
               )}
 
               {currentTab === 'customers' && (
@@ -670,6 +688,15 @@ export default function App() {
           onSeePlans={handleOnboardingSeePlans}
         />
       )}
+
+      {/* Google Drive Permission Modal for Drive Plan */}
+      <DrivePermissionModal
+        isOpen={showDrivePermissionModal}
+        onClose={() => setShowDrivePermissionModal(false)}
+        onPermissionGranted={() => {
+          reloadData();
+        }}
+      />
 
       {/* Floating Toast Notifications */}
       <ToastNotificationContainer />

@@ -178,11 +178,21 @@ export interface InvoiceTemplate {
   config: TemplateConfig;
 }
 
+export interface UserSubscription {
+  plan: PlanTier;
+  planName: string; // 'Free Plan' | 'Drive Plan' | 'Pro Gold Program'
+  status: 'active' | 'trial' | 'canceled';
+  updatedAt: string;
+  drivePermissionGranted?: boolean;
+  cloudBackupEnabled?: boolean;
+}
+
 export interface DriveSyncState {
   isConnected: boolean;
   email?: string;
   lastBackupAt?: string;
   autoSync: boolean;
+  permissionGranted?: boolean;
 }
 
 export interface AppSettings {

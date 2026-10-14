@@ -46,7 +46,9 @@ export const PricingView: React.FC<PricingViewProps> = ({
 
     onSelectPlan(plan);
     setSelectedPlanNotice(
-      `✓ ${plan === 'drive' ? 'Drive Backup' : 'Pro Cloud'} tier activated successfully! Enjoy watermark-free exports and premium features.`
+      plan === 'pro'
+        ? '✓ Pro Gold Program activated! Enjoy 100% ad-free & watermark-free exports.'
+        : '✓ Drive Plan selected! Connect Google Drive to enable automated cloud backups.'
     );
     setTimeout(() => setSelectedPlanNotice(null), 4000);
   };
@@ -126,7 +128,11 @@ export const PricingView: React.FC<PricingViewProps> = ({
             <div className="space-y-2.5 text-xs text-neutral-700 pt-4 border-t border-neutral-100">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Unlimited local invoices</span>
+                <span>Unlimited local invoices & quotes</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Two-way GST line calculation</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -144,9 +150,13 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Structured JSON backup & restore</span>
               </div>
-              <div className="flex items-center gap-2 text-neutral-400">
+              <div className="flex items-center gap-2 text-neutral-500">
                 <span className="w-4 h-4 text-center text-xs shrink-0 font-bold">·</span>
                 <span>Subtle InvoiceFlow watermark</span>
+              </div>
+              <div className="flex items-center gap-2 text-neutral-500">
+                <span className="w-4 h-4 text-center text-xs shrink-0 font-bold">·</span>
+                <span>Sponsored partner banner ads</span>
               </div>
             </div>
           </div>
@@ -175,13 +185,13 @@ export const PricingView: React.FC<PricingViewProps> = ({
         >
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-bold text-neutral-900">Drive</h3>
+              <h3 className="text-lg font-bold text-neutral-900">Drive Plan</h3>
               <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                Cloud Backup
+                Google Drive
               </span>
             </div>
             <p className="text-xs text-neutral-500 min-h-[32px]">
-              Automatic cloud synchronization using your own Google Drive.
+              Automatic cloud synchronization using your personal Google Drive.
             </p>
 
             <div className="my-6">
@@ -189,7 +199,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 {isIndia ? '₹49' : '$2.99'}
                 <span className="text-xs font-normal text-neutral-500">/mo</span>
               </div>
-              <div className="text-xs text-neutral-400 mt-0.5">Authentication required</div>
+              <div className="text-xs text-neutral-400 mt-0.5">Authentication & Drive permission required</div>
             </div>
 
             <div className="space-y-2.5 text-xs text-neutral-700 pt-4 border-t border-neutral-100">
@@ -197,9 +207,13 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Everything in Free</span>
               </div>
+              <div className="flex items-center gap-2 font-semibold text-blue-900">
+                <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>Google Drive backup destination</span>
+              </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Google Drive backup destination</span>
+                <span>Permission to save & modify backups</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -209,9 +223,13 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Default country templates</span>
               </div>
-              <div className="flex items-center gap-2 text-neutral-400">
+              <div className="flex items-center gap-2 text-neutral-500">
                 <span className="w-4 h-4 text-center text-xs shrink-0 font-bold">·</span>
                 <span>Subtle InvoiceFlow watermark</span>
+              </div>
+              <div className="flex items-center gap-2 text-neutral-500">
+                <span className="w-4 h-4 text-center text-xs shrink-0 font-bold">·</span>
+                <span>Sponsored partner banner ads</span>
               </div>
             </div>
           </div>
@@ -219,13 +237,21 @@ export const PricingView: React.FC<PricingViewProps> = ({
           <div className="mt-8 space-y-2">
             <button
               onClick={() => handlePaidSelect('drive')}
-              className="w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800 flex items-center justify-center gap-1.5"
+              className={`w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                currentPlan === 'drive'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-neutral-900 text-white hover:bg-neutral-800'
+              }`}
             >
               {currentUser ? (
-                <>
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Drive Backup (Coming Soon)</span>
-                </>
+                currentPlan === 'drive' ? (
+                  <span>Current Active Plan</span>
+                ) : (
+                  <>
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Select Drive Plan</span>
+                  </>
+                )
               ) : (
                 <>
                   <LogIn className="w-3.5 h-3.5" />
@@ -234,35 +260,36 @@ export const PricingView: React.FC<PricingViewProps> = ({
               )}
             </button>
             <div className="text-[10px] text-center text-neutral-400">
-              {currentUser ? 'Logged in · Real billing integration in progress' : 'Requires authenticated account'}
+              {currentUser ? 'Logged in · Requests Google Drive backup permission' : 'Requires authenticated account'}
             </div>
           </div>
         </div>
 
-        {/* PRO CLOUD PLAN */}
+        {/* PRO GOLD PROGRAM */}
         <div
           className={`bg-white rounded-2xl border-2 p-6 flex flex-col justify-between shadow-md transition-all relative ${
             currentPlan === 'pro'
-              ? 'border-neutral-950 ring-2 ring-neutral-900/10'
+              ? 'border-amber-500 ring-2 ring-amber-500/20'
               : 'border-neutral-900'
           }`}
         >
           {/* Badge */}
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-neutral-950 text-white text-[11px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider">
-            Most Features
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-amber-600 text-neutral-950 font-black text-[11px] px-3.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            <span>Top Tier</span>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-bold text-neutral-900 flex items-center gap-1.5">
-                Pro Cloud <Crown className="w-4 h-4 text-amber-500 fill-amber-500" />
+                Pro Gold Program <Crown className="w-4 h-4 text-amber-500 fill-amber-500" />
               </h3>
-              <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded">
-                Unbranded
+              <span className="text-[11px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded">
+                Zero Ads · Zero Watermark
               </span>
             </div>
             <p className="text-xs text-neutral-500 min-h-[32px]">
-              Full branding control, custom builder, and zero watermarks.
+              Full branding control, custom builder, unbranded PDFs, and 100% ad-free experience.
             </p>
 
             <div className="my-6">
@@ -282,21 +309,25 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>NO InvoiceFlow watermark</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>All premium invoice templates</span>
+              <div className="flex items-center gap-2 font-bold text-amber-950 bg-amber-50/70 p-1 rounded-md">
+                <Crown className="w-4 h-4 text-amber-600 fill-amber-500 shrink-0" />
+                <span>100% Ad-Free (Zero sponsored ads)</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Live Custom Template Builder</span>
+                <span>All premium invoice & quotation templates</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Multi-device synchronization</span>
+                <span>Live Custom Template Builder (all toggles)</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Custom colors, fonts & layouts</span>
+                <span>Cloud Data Sync (Saved in our cloud)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Custom colors, fonts, layouts & signatures</span>
               </div>
             </div>
           </div>
@@ -304,13 +335,21 @@ export const PricingView: React.FC<PricingViewProps> = ({
           <div className="mt-8 space-y-2">
             <button
               onClick={() => handlePaidSelect('pro')}
-              className="w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer bg-neutral-950 text-white hover:bg-neutral-800 flex items-center justify-center gap-1.5 shadow-sm"
+              className={`w-full py-2.5 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm ${
+                currentPlan === 'pro'
+                  ? 'bg-amber-500 text-neutral-950 font-extrabold'
+                  : 'bg-neutral-950 text-white hover:bg-neutral-800'
+              }`}
             >
               {currentUser ? (
-                <>
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Pro Cloud (Coming Soon)</span>
-                </>
+                currentPlan === 'pro' ? (
+                  <span>Current Active Plan</span>
+                ) : (
+                  <>
+                    <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>Select Pro Gold Program</span>
+                  </>
+                )
               ) : (
                 <>
                   <LogIn className="w-3.5 h-3.5" />
@@ -319,7 +358,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               )}
             </button>
             <div className="text-[10px] text-center text-neutral-400">
-              {currentUser ? 'Logged in · Real billing integration in progress' : 'Requires authenticated account'}
+              {currentUser ? 'Logged in · Activates unbranded exports & ad-free UI' : 'Requires authenticated account'}
             </div>
           </div>
         </div>

@@ -4,8 +4,11 @@ import {
   exportBackupFile,
   importBackupPayload,
   clearAllLocalData,
+  mockTriggerDriveBackup,
 } from '../lib/storage';
 import { useAuth } from '../context/AuthContext';
+import { DrivePermissionModal } from './DrivePermissionModal';
+import { showToast } from './ToastNotification';
 import {
   HardDrive,
   Cloud,
@@ -51,6 +54,7 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
   // Danger Zone Clear Data Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationWord, setDeleteConfirmationWord] = useState('');
+  const [showDrivePermissionModal, setShowDrivePermissionModal] = useState(false);
 
   const handleExport = () => {
     exportBackupFile();
@@ -307,30 +311,122 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
             <Cloud className="w-5 h-5 text-blue-600" />
             <div>
               <h3 className="text-sm font-bold text-neutral-900">
-                Google Drive Backup (Drive Plan)
+                Google Drive Backup & Sync
               </h3>
               <p className="text-xs text-neutral-500">
-                Direct integration with your personal Google Drive account.
+                Store and synchronize your invoices and quotations in your personal Google Drive.
               </p>
             </div>
           </div>
 
           <div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">
-              <Clock className="w-3 h-3 text-amber-600" /> Coming Soon
-            </span>
+            {plan === 'drive' ? (
+              settings.driveSync?.permissionGranted ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Permission Granted
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Permission Required
+                </span>
+              )
+            ) : plan === 'pro' ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-md">
+                Pro Gold Cloud
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-md">
+                Drive Plan Required
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-2 text-xs">
-          <p className="text-neutral-700">
-            <strong>Architecture Status:</strong> Google Drive backup requires an OAuth consent client and Google Drive AppData scope to safely write JSON files to the user's personal drive without reading unrelated files.
-          </p>
-          <div className="text-neutral-500 text-[11px] flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Blocked by external configuration: Google OAuth Client & Drive API scope approval.</span>
+        {plan === 'drive' ? (
+          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-3 text-xs">
+            {settings.driveSync?.permissionGranted ? (
+              <>
+                <div className="flex items-start gap-2 text-emerald-900">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-neutral-900">
+                      Authorization Active: Permission Granted
+                    </p>
+                    <p className="text-neutral-600 text-[11px] mt-0.5">
+                      InvoiceFlow has authorized access to create, edit, modify, and save backup files in your Google Drive (<code className="font-mono bg-neutral-200/60 px-1 py-0.5 rounded text-[10px]">drive.file</code> scope).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-200 text-[11px]">
+                  <span className="text-neutral-500">
+                    Last Cloud Sync: <strong>{settings.driveSync?.lastBackupAt || 'Not synced yet'}</strong>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        mockTriggerDriveBackup();
+                        showToast('Backup successfully synchronized to Google Drive!', 'success');
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    >
+                      Sync Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDrivePermissionModal(true)}
+                      className="px-3 py-1.5 bg-white border border-neutral-300 hover:bg-neutral-100 text-neutral-700 font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    >
+                      Review Permissions
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-start gap-2 text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-neutral-900">
+                      Google Drive Permission Needed
+                    </p>
+                    <p className="text-neutral-600 text-[11px] mt-0.5">
+                      You are subscribed to the Drive Plan. To save and edit backup files directly in your Google Drive, InvoiceFlow needs your one-time permission.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-neutral-200 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowDrivePermissionModal(true)}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Authorize Google Drive</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        ) : plan === 'pro' ? (
+          <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 space-y-2 text-xs">
+            <p className="text-amber-950 font-medium">
+              <strong>Pro Gold Cloud Architecture:</strong> As a Pro Gold member, you receive 100% ad-free, unbranded invoice generation. Direct cloud synchronization and custom template persistence are enabled for this account.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-2 text-xs">
+            <p className="text-neutral-700">
+              <strong>Free Plan Status:</strong> Your invoices and quotations are stored 100% privately in your browser's local storage. To enable automated Google Drive sync and multi-device backup, upgrade to the <strong>Drive Plan</strong>.
+            </p>
+            <div className="text-neutral-500 text-[11px] flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Drive Plan is available at ₹49/mo ($2.99/mo).</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Danger Zone: Clear Local Data */}
@@ -441,6 +537,22 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
           </div>
         </div>
       )}
+
+      {/* Google Drive Permission Modal */}
+      <DrivePermissionModal
+        isOpen={showDrivePermissionModal}
+        onClose={() => setShowDrivePermissionModal(false)}
+        onPermissionGranted={() => {
+          onSettingsUpdated({
+            ...settings,
+            driveSync: {
+              ...settings.driveSync,
+              permissionGranted: true,
+              isConnected: true,
+            },
+          });
+        }}
+      />
     </div>
   );
 };

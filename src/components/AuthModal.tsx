@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { PlanTier } from '../types';
 import { X, Mail, Lock, AlertCircle, CheckCircle, Loader2, User, Crown, Sparkles } from 'lucide-react';
 
 interface AuthModalProps {
@@ -73,7 +74,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (mode === 'login') {
         await loginWithEmail(email, password);
       } else {
-        await registerWithEmail(email, password);
+        await registerWithEmail(email, password, (targetPlan as PlanTier) || 'free');
       }
       onSuccess?.();
       onClose();

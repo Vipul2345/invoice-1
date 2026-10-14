@@ -142,14 +142,14 @@ export const FAQ_ITEMS: FaqItem[] = [
     category: 'Plans',
     question: 'What is the Drive plan ($2.99 / ₹49/month)?',
     answer:
-      'The Drive plan includes everything in Free, plus automated backup to your personal Google Drive, multi-device backup restore, and regional country templates. The subtle InvoiceFlow watermark remains.',
+      'The Drive plan includes everything in Free, plus automated backup to your personal Google Drive, multi-device backup restore, and regional country templates. The subtle InvoiceFlow watermark and sponsored ads remain.',
   },
   {
     id: 'faq-19',
     category: 'Plans',
-    question: 'What is the Pro Cloud plan ($4.99 / ₹99/month)?',
+    question: 'What is the Pro Gold Program ($4.99 / ₹99/month)?',
     answer:
-      'Pro Cloud includes all Drive features, complete watermark removal, access to all premium templates, the live Custom Template Builder, and upcoming multi-device cloud synchronization.',
+      'The Pro Gold Program includes all Drive features, complete watermark removal, zero ads (100% ad-free), access to all premium templates, the live Custom Template Builder, and cloud data synchronization.',
   },
   {
     id: 'faq-20',
@@ -234,9 +234,9 @@ export const PRIVACY_POLICY_TEXT = {
         'If you opt to use the Drive backup feature, data is archived directly into your personal Google Drive account under your explicit authorization. InvoiceFlow does not receive a copy of your files on its own servers during this synchronization.',
     },
     {
-      title: '9. Future InvoiceFlow Cloud Storage',
+      title: '9. Pro Gold Program Cloud Storage',
       content:
-        'In future releases of the Pro Cloud plan, optional managed cloud synchronization may be offered. In such future events, cloud storage will require explicit user consent, secure end-to-end transport, and transparent server privacy disclosures.',
+        'In the Pro Gold Program, optional managed cloud synchronization is configured. Cloud storage operations require authenticated user access, secure end-to-end transport, and adherence to Firebase cloud storage policies.',
     },
     {
       title: '10. How We Use Information',
@@ -359,9 +359,9 @@ export const TERMS_OF_SERVICE_TEXT = {
         'The Drive plan facilitates backup archives inside your personal Google Drive account. Use of Google Drive is subject to Google\'s separate terms and policies. InvoiceFlow is not an affiliate of Google LLC.',
     },
     {
-      title: '12. Pro Cloud Service',
+      title: '12. Pro Gold Program',
       content:
-        'The Pro Cloud plan represents a future multi-device synchronization service. Prototype depictions of Pro Cloud represent feature roadmaps and prototype capabilities.',
+        'The Pro Gold Program represents the top unbranded, ad-free tier offering custom template building, multi-device backup, and upcoming cloud storage synchronization.',
     },
     {
       title: '13. Subscriptions',
@@ -454,7 +454,7 @@ export const REFUND_POLICY_TEXT = {
     {
       title: '2. Future Paid Subscription Terms',
       content:
-        'Prior to the public launch of commercial Drive ($2.99/mo / ₹49/mo) and Pro Cloud ($4.99/mo / ₹99/mo) plans, a complete, binding commercial refund policy will be published. This will outline grace periods, monthly vs annual billing policies, and billing dispute processes.',
+        'Prior to the public launch of commercial Drive ($2.99/mo / ₹49/mo) and Pro Gold Program ($4.99/mo / ₹99/mo) plans, a complete, binding commercial refund policy will be published. This will outline grace periods, monthly vs annual billing policies, and billing dispute processes.',
     },
     {
       title: '3. Cancellation Guarantee',

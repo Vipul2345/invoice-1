@@ -1125,7 +1125,7 @@ Subject to agreement and terms.`;
                 <span>Simple Offline Quotations & Invoicing</span>
               </div>
               <div className="no-print mt-1 sm:mt-0 text-[10px] text-neutral-400">
-                (Upgrade to Pro to remove watermark)
+                (Upgrade to Pro Gold Program to remove watermark and ads)
               </div>
             </div>
           ) : (
