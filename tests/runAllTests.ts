@@ -5,6 +5,8 @@ const dir = import.meta.dirname;
 const testFiles = [
   path.join(dir, 'taxCalculations.test.ts'),
   path.join(dir, 'quotationAndStorage.test.ts'),
+  path.join(dir, 'firestoreRules.test.ts'),
+  path.join(dir, 'paymentSecurity.test.ts'),
 ];
 
 let failed = false;

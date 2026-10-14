@@ -44,7 +44,6 @@ export const getRazorpayKey = (): string => {
   return (
     import.meta.env.VITE_RAZORPAY_KEY_ID ||
     import.meta.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-    import.meta.env.RAZORPAY_KEY_ID ||
     ''
   );
 };
@@ -86,7 +85,7 @@ export interface RazorpayPaymentResult {
 }
 
 /**
- * Initiates Razorpay checkout with Monthly Autopay support
+ * Initiates Razorpay checkout with Monthly Autopay support and server-side verification
  */
 export async function initiateRazorpayPayment(params: {
   plan: 'drive' | 'pro';
@@ -101,23 +100,15 @@ export async function initiateRazorpayPayment(params: {
   const planConfig = RAZORPAY_PLANS[plan];
   const razorpayKey = getRazorpayKey();
 
-  // If Razorpay Key is not yet configured in .env, provide an informative simulated test mode
+  // If Razorpay Key is not configured in .env, do not simulate successful payment
   if (!isRazorpayConfigured()) {
     console.warn(
-      '⚠️ VITE_RAZORPAY_KEY_ID is not configured in .env. Proceeding with instant test checkout.'
+      '⚠️ VITE_RAZORPAY_KEY_ID is not configured in .env. Cannot proceed with live payment gateway.'
     );
-    const mockPaymentId = `pay_test_${Math.random().toString(36).substring(2, 11)}`;
-    const mockSubId = `sub_test_${Math.random().toString(36).substring(2, 11)}`;
-    
-    // Simulate slight network delay
-    await new Promise((res) => setTimeout(res, 600));
-
     return {
-      success: true,
-      paymentId: mockPaymentId,
-      subscriptionId: mockSubId,
-      isAutopay: true,
-      message: 'Test payment approved with monthly Autopay enabled.',
+      success: false,
+      isAutopay: false,
+      message: 'Razorpay payment gateway is not configured. Live payments require VITE_RAZORPAY_KEY_ID and the server verification service.',
     };
   }
 
@@ -161,15 +152,51 @@ export async function initiateRazorpayPayment(params: {
             });
           },
         },
-        handler: function (response: any) {
-          resolve({
-            success: true,
-            paymentId: response.razorpay_payment_id,
-            subscriptionId: response.razorpay_subscription_id,
-            orderId: response.razorpay_order_id,
-            isAutopay: true,
-            message: 'Payment and monthly Autopay approved successfully!',
-          });
+        handler: async function (response: any) {
+          try {
+            // Forward payment credentials to trusted server for cryptographic HMAC verification
+            const verifyResp = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
+                razorpay_signature: response.razorpay_signature,
+                plan,
+                userId: user.uid,
+              }),
+            });
+
+            const verifyData = await verifyResp.json();
+
+            if (!verifyResp.ok || !verifyData.verified) {
+              resolve({
+                success: false,
+                isAutopay: false,
+                message: verifyData.error || 'Server payment signature verification failed.',
+              });
+              return;
+            }
+
+            resolve({
+              success: true,
+              paymentId: response.razorpay_payment_id,
+              subscriptionId: response.razorpay_subscription_id,
+              orderId: response.razorpay_order_id,
+              isAutopay: true,
+              message: verifyData.message || 'Payment verified and monthly subscription activated successfully!',
+            });
+          } catch (err: any) {
+            console.error('Server payment verification request failed:', err);
+            resolve({
+              success: false,
+              isAutopay: false,
+              message: `Payment verification failed: Could not connect to verification backend (${err.message}).`,
+            });
+          }
         },
       };
 

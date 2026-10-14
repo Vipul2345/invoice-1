@@ -1,11 +1,57 @@
 rules_version = '2';
 
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: /users/{userId}
+// Document ID: Valid user UID (string, 1-128 chars, [a-zA-Z0-9_-]+)
+// Fields:
+//   - uid: string (required) - Authenticated Firebase Auth UID
+//   - email: string (required) - User email address
+//   - displayName: string (optional) - User display name
+//   - photoURL: string (optional) - User avatar image URL
+//   - createdAt: string (optional) - Account creation timestamp
+//   - plan: string (optional, server-controlled) - "free", "drive", or "pro"
+//   - subscription: map (optional, server-controlled) - Subscription entitlement details
+//       * plan: string ("free", "drive", "pro")
+//       * planName: string
+//       * status: string ("active", "past_due", "canceled", "expired", etc.)
+//       * updatedAt: string
+//       * drivePermissionGranted: bool
+//       * cloudBackupEnabled: bool
+//       * razorpayPaymentId: string | null
+//       * razorpaySubscriptionId: string | null
+//       * currentPeriodStart: string
+//       * currentPeriodEnd: string
+//       * autoRenew: bool
+//   - lastDailySyncDate: string (optional) - ISO date (YYYY-MM-DD)
+//   - lastCloudSyncAt: string (optional) - ISO timestamp of latest cloud backup
+//
+// Subcollections under /users/{userId}:
+//   - businesses/{businessId} - User business profile data (Owner read/write)
+//   - customers/{customerId} - User customer records (Owner read/write)
+//   - invoices/{invoiceId} - User invoices (Owner read/write)
+//   - quotations/{quotationId} - User quotations (Owner read/write)
+//   - templates/{templateId} - User custom templates (Owner read/write)
+//   - cloudData/{docId} - User cloud backups (Owner read/write if active paid plan)
+//
+// Collection: /processed_webhook_events/{eventId}
+// Document ID: Webhook event ID
+// Access: Server-side Admin SDK only. Zero client read/write access.
+//
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
     // Default-deny catch-all
     match /{document=**} {
       allow read, write: if false;
     }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
 
     function isSignedIn() {
       return request.auth != null;
@@ -27,11 +73,51 @@ service cloud.firestore {
         (userDoc.data.subscription.plan == 'drive' || userDoc.data.subscription.plan == 'pro');
     }
 
+    // Validate that initial client document creation does not grant paid plans or active subscriptions
+    function isSafeInitialPlan(data) {
+      return !('plan' in data) || data.plan == null || data.plan == 'free';
+    }
+
+    function isSafeInitialSubscription(data) {
+      return !('subscription' in data) ||
+        data.subscription == null ||
+        (data.subscription is map &&
+          (!('plan' in data.subscription) || data.subscription.plan == null || data.subscription.plan == 'free'));
+    }
+
+    function isSafeInitialUserData(data) {
+      return isSafeInitialPlan(data) && isSafeInitialSubscription(data);
+    }
+
+    // Validate that client updates do NOT modify privileged entitlement fields (subscription, plan)
+    function isPrivilegedPlanUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'plan']);
+    }
+
+    // UID immutability
+    function isUidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function isUidValid() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Webhook events processed by backend server (Admin SDK only, zero client access)
+    match /processed_webhook_events/{eventId} {
+      allow read, write: if false;
+    }
+
     // User profile document
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create, update: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isUidValid() && isSafeInitialUserData(request.resource.data);
+      allow update: if isOwner(userId) && isValidId(userId) && isUidUnchanged() && isPrivilegedPlanUnchanged();
       allow delete: if isOwner(userId);
 
       // User scoped subcollections: businesses, customers, invoices, quotations, templates, cloudData

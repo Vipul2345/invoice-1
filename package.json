@@ -18,6 +18,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js dist_electron",
     "lint": "tsc --noEmit",
+    "server": "tsx server/server.ts",
     "test": "tsx tests/runAllTests.ts"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^13.0.0",
+    "firebase-admin": "^14.5.0",
     "html2canvas": "^1.4.1",
     "html2canvas-pro": "^2.5.0",
     "jspdf": "^4.2.1",

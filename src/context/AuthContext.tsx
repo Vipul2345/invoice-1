@@ -94,12 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
             setSubscription(updatedSub);
 
-            if (hasExpired && sub.status === 'active') {
-              await setDoc(userRef, {
-                plan: 'free',
-                subscription: updatedSub,
-              }, { merge: true });
-            }
+            // Do not mutate Firestore subscription from client; backend Admin SDK manages entitlements
           } else {
             setUserPlan(sub.plan);
             setPlanTier(sub.plan);
@@ -111,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } else {
-          // Backfill subscription data in Firestore if missing
+          // Default local subscription state if not yet set in Firestore
           const defaultSub: UserSubscription = {
             plan,
             planName: getPlanDisplayName(plan),
@@ -121,7 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             cloudBackupEnabled: plan === 'pro',
           };
           setSubscription(defaultSub);
-          await setDoc(userRef, { subscription: defaultSub }, { merge: true });
         }
         return;
       } else {
@@ -340,20 +334,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setSubscription(cancelledSub);
 
-    // 2. Persist cancellation to Firestore
+    // 2. Notify backend server to cancel subscription and update Firestore via Admin SDK
     if (auth.currentUser) {
       try {
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        await setDoc(
-          userRef,
-          {
-            plan: 'free',
-            subscription: cancelledSub,
-          },
-          { merge: true }
-        );
+        await fetch('/api/cancel-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: auth.currentUser.uid }),
+        });
       } catch (err) {
-        console.warn('Failed to update cancelled subscription in Firestore:', err);
+        console.warn('Backend cancel endpoint error (server webhook handles status sync):', err);
       }
     }
 
@@ -417,17 +407,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mockDisconnectDrive();
     }
 
-    if (auth.currentUser) {
-      try {
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        await setDoc(userRef, {
-          plan,
-          subscription: sub,
-        }, { merge: true });
-      } catch (err) {
-        console.warn('Failed to update subscription in Firestore:', err);
-      }
-    }
+    // Note: Paid Firestore updates are performed exclusively by the trusted backend Admin SDK
+    // upon cryptographic payment signature verification or webhook receipt.
 
     try {
       const savedMock = localStorage.getItem('invoiceflow_mock_user');

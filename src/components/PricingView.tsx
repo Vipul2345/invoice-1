@@ -42,7 +42,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
   onOpenLegalDoc,
   onRequestAuth,
 }) => {
-  const { currentUser, updateSubscription, cancelSubscription } = useAuth();
+  const { currentUser, updateSubscription, cancelSubscription, refreshUserProfile } = useAuth();
   const [selectedPlanNotice, setSelectedPlanNotice] = useState<string | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState<string | null>(null);
 
@@ -91,10 +91,13 @@ export const PricingView: React.FC<PricingViewProps> = ({
 
       if (!result.success) {
         if (result.message) {
-          showToast(result.message, 'info');
+          showToast(result.message, 'error');
         }
         return;
       }
+
+      // Refresh Firestore profile updated by server Admin SDK
+      await refreshUserProfile();
 
       await updateSubscription(plan, plan === 'drive', {
         razorpayPaymentId: result.paymentId,
