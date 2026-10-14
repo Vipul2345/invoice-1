@@ -9,7 +9,23 @@ export interface GeneratePdfOptions {
   invoice?: Invoice;
   quotation?: Quotation;
   elementId?: string;
+  shareTitle?: string;
+  shareText?: string;
   onProgress?: (status: string) => void;
+}
+
+/**
+ * Detects whether the current environment supports native file sharing (attaching actual PDF files to apps like WhatsApp/Gmail).
+ */
+export function canShareFilesDirectly(): boolean {
+  if (Capacitor.isNativePlatform()) return true;
+  if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return false;
+  try {
+    const testFile = new File(['test'], 'test.pdf', { type: 'application/pdf' });
+    return navigator.canShare({ files: [testFile] });
+  } catch {
+    return false;
+  }
 }
 
 export interface RenderedPdfResult {
@@ -204,7 +220,10 @@ export async function shareDocumentPdf(
     const { pdf, pdfBlob, safeFilename, docNumber, docTypeLabel, customerName, summaryText } =
       await renderDocumentPdf(options);
 
-    options.onProgress?.('Opening share sheet...');
+    const finalShareTitle = options.shareTitle || `${docTypeLabel} ${docNumber}`;
+    const finalShareText = options.shareText || summaryText;
+
+    options.onProgress?.('Opening share sheet with PDF attached...');
 
     // 1. Android / iOS Capacitor Native Share
     if (Capacitor.isNativePlatform()) {
@@ -218,11 +237,11 @@ export async function shareDocumentPdf(
         });
 
         await Share.share({
-          title: safeFilename,
-          text: `${docTypeLabel} ${docNumber} for ${customerName}`,
+          title: finalShareTitle,
+          text: finalShareText,
           url: writeResult.uri,
           files: [writeResult.uri],
-          dialogTitle: `Share ${docTypeLabel} (${docNumber})`,
+          dialogTitle: `Share ${docTypeLabel} (${docNumber}) with PDF Attached`,
         });
 
         return { success: true, method: 'capacitor-share' };
@@ -241,8 +260,8 @@ export async function shareDocumentPdf(
       try {
         await navigator.share({
           files: [pdfFile],
-          title: `${docTypeLabel} ${docNumber}`,
-          text: summaryText,
+          title: finalShareTitle,
+          text: finalShareText,
         });
         return { success: true, method: 'web-share-file' };
       } catch (err: any) {
@@ -270,8 +289,8 @@ export async function shareDocumentPdf(
         }, 2000);
 
         await navigator.share({
-          title: `${docTypeLabel} ${docNumber}`,
-          text: summaryText,
+          title: finalShareTitle,
+          text: finalShareText,
         });
         return { success: true, method: 'web-share-text' };
       } catch (err: any) {
@@ -324,14 +343,22 @@ export async function downloadInvoicePdf(
 }
 
 /**
- * Dedicated share helper for invoices
+ * Dedicated share helper for invoices with PDF attachment and message support
  */
 export async function shareInvoicePdf(
-  options: { invoice: Invoice; elementId?: string; onProgress?: (status: string) => void }
+  options: {
+    invoice: Invoice;
+    elementId?: string;
+    shareTitle?: string;
+    shareText?: string;
+    onProgress?: (status: string) => void;
+  }
 ) {
   return shareDocumentPdf({
     invoice: options.invoice,
     elementId: options.elementId || 'invoice-document',
+    shareTitle: options.shareTitle,
+    shareText: options.shareText,
     onProgress: options.onProgress,
   });
 }
@@ -350,14 +377,22 @@ export async function downloadQuotationPdf(
 }
 
 /**
- * Dedicated share helper for quotations
+ * Dedicated share helper for quotations with PDF attachment and message support
  */
 export async function shareQuotationPdf(
-  options: { quotation: Quotation; elementId?: string; onProgress?: (status: string) => void }
+  options: {
+    quotation: Quotation;
+    elementId?: string;
+    shareTitle?: string;
+    shareText?: string;
+    onProgress?: (status: string) => void;
+  }
 ) {
   return shareDocumentPdf({
     quotation: options.quotation,
     elementId: options.elementId || 'quotation-document',
+    shareTitle: options.shareTitle,
+    shareText: options.shareText,
     onProgress: options.onProgress,
   });
 }

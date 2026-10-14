@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Quotation, InvoiceTemplate, PlanTier, BusinessProfile, QuotationStatus } from '../types';
 import { COUNTRIES } from '../lib/constants';
 import { formatCurrency } from '../lib/storage';
-import { downloadQuotationPdf, shareQuotationPdf } from '../lib/pdfGenerator';
+import { downloadQuotationPdf, shareQuotationPdf, canShareFilesDirectly } from '../lib/pdfGenerator';
 import { calculateDocumentTotals } from '../lib/taxCalculations';
 import {
   Printer,
@@ -24,6 +24,7 @@ import {
   ExternalLink,
   X,
   Send,
+  Paperclip,
 } from 'lucide-react';
 
 interface QuotationPreviewProps {
@@ -69,6 +70,22 @@ export const QuotationPreview: React.FC<QuotationPreviewProps> = ({
   // Compute live tax breakdown from lines
   const docTotals = calculateDocumentTotals(quotation.items, { isIndia });
 
+  const getQuotationShareMessage = () => {
+    const customerName = quotation.customerSnapshot.name;
+    const companyName = quotation.customerSnapshot.company ? ` (${quotation.customerSnapshot.company})` : '';
+    const totalStr = formatCurrency(quotation.grandTotal, quotation.currency, quotation.currencySymbol);
+
+    return `📋 *QUOTATION / ESTIMATE: ${quotation.quotationNumber}*
+From: ${business.name || 'InvoiceFlow'}
+To: ${customerName}${companyName}
+
+💰 *Quoted Total:* ${totalStr}
+📅 *Valid Until:* ${quotation.validUntil}
+📊 *Status:* ${quotation.status.toUpperCase()}
+
+Please find the quotation PDF document attached. Please let us know if you have any questions or wish to proceed. Thank you!`;
+  };
+
   const handleDownloadPdf = async () => {
     if (isGeneratingPdf) return;
     setIsGeneratingPdf(true);
@@ -95,34 +112,37 @@ export const QuotationPreview: React.FC<QuotationPreviewProps> = ({
     }
   };
 
-  const handleSharePdf = async () => {
+  const handleSharePdf = async (customText?: string) => {
     if (isSharingPdf || isGeneratingPdf) return;
     setIsSharingPdf(true);
-    setShareStatus('Preparing Quotation PDF...');
+    setShareStatus('Preparing Quotation PDF with message...');
     setShareFeedback(null);
     try {
+      const shareMessage = customText || getQuotationShareMessage();
       const result = await shareQuotationPdf({
         quotation,
         elementId: 'quotation-document',
+        shareTitle: `Quotation ${quotation.quotationNumber}`,
+        shareText: shareMessage,
         onProgress: (status) => setShareStatus(status),
       });
 
       if (result.success) {
         if (result.fallbackToDownload) {
           setShareFeedback({
-            message: 'PDF downloaded! Since native app sharing is unavailable on this browser/OS, you can attach the file directly to WhatsApp or Gmail using the buttons below.',
+            message: `PDF (${quotation.quotationNumber}.pdf) downloaded! Since native app sharing is not supported by this browser, you can attach the file directly to WhatsApp or Gmail using the buttons below.`,
             type: 'info',
           });
         } else {
           setShareFeedback({
-            message: 'Share sheet opened successfully!',
+            message: 'Share sheet opened with PDF file and message attached!',
             type: 'success',
           });
           setTimeout(() => setShareFeedback(null), 4000);
         }
       } else {
         setShareFeedback({
-          message: result.error || 'Could not launch system share sheet. Please use the WhatsApp or Gmail buttons below.',
+          message: result.error || 'Could not launch system share sheet. Please use direct WhatsApp or Gmail buttons below.',
           type: 'warning',
         });
       }
@@ -138,31 +158,51 @@ export const QuotationPreview: React.FC<QuotationPreviewProps> = ({
     }
   };
 
-  const handleShareWhatsApp = () => {
-    const customerName = quotation.customerSnapshot.name;
-    const companyName = quotation.customerSnapshot.company ? ` (${quotation.customerSnapshot.company})` : '';
-    const totalStr = formatCurrency(quotation.grandTotal, quotation.currency, quotation.currencySymbol);
+  const handleShareWhatsApp = async () => {
+    const msg = getQuotationShareMessage();
 
-    const msg = `📋 *QUOTATION / ESTIMATE: ${quotation.quotationNumber}*
-From: ${business.name || 'InvoiceFlow'}
-To: ${customerName}${companyName}
-
-💰 *Quoted Total:* ${totalStr}
-📅 *Valid Until:* ${quotation.validUntil}
-📊 *Status:* ${quotation.status.toUpperCase()}
-
-Please find your quotation estimate above. Please let us know if you have any questions or when you would like to proceed. Thank you!`;
-
-    let rawPhone = (quotation.customerSnapshot.phone || '').replace(/[^0-9]/g, '');
-    if (rawPhone.length === 10 && quotation.country === 'IN') {
-      rawPhone = '91' + rawPhone;
+    // 1. If device/browser supports native file sharing (Android APK, mobile web, macOS, Windows Edge):
+    // Directly launch native share sheet with the actual PDF attached and message included!
+    if (canShareFilesDirectly()) {
+      await handleSharePdf(msg);
+      return;
     }
 
-    const waUrl = rawPhone.length >= 10
-      ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`
-      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    // 2. If browser does not allow web pages to inject local files into external URLs (desktop browsers):
+    // Download the PDF automatically so the user has the file immediately on hand, then open WhatsApp!
+    setIsSharingPdf(true);
+    setShareStatus('Generating PDF for attachment...');
+    try {
+      await downloadQuotationPdf({
+        quotation,
+        elementId: 'quotation-document',
+      });
 
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
+      let rawPhone = (quotation.customerSnapshot.phone || '').replace(/[^0-9]/g, '');
+      if (rawPhone.length === 10 && quotation.country === 'IN') {
+        rawPhone = '91' + rawPhone;
+      }
+
+      const waUrl = rawPhone.length >= 10
+        ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+      setShareFeedback({
+        message: `📄 PDF (${quotation.quotationNumber}.pdf) downloaded to your computer! We opened WhatsApp with your message — simply drag & drop the downloaded PDF or click 📎 (Attach Document) in WhatsApp.`,
+        type: 'info',
+      });
+    } catch (err: any) {
+      console.error(err);
+      setShareFeedback({
+        message: 'Could not generate PDF. Please try again.',
+        type: 'warning',
+      });
+    } finally {
+      setIsSharingPdf(false);
+      setShareStatus('');
+    }
   };
 
   const getEmailSubjectAndBody = () => {
@@ -171,7 +211,7 @@ Please find your quotation estimate above. Please let us know if you have any qu
     const subject = `Quotation ${quotation.quotationNumber} from ${business.name || 'InvoiceFlow'}`;
     const body = `Dear ${customerName},
 
-Please find our quotation / price estimate (${quotation.quotationNumber}) detailed below:
+Please find our quotation / price estimate (${quotation.quotationNumber}) detailed below (PDF attached):
 
 • Quotation Number: ${quotation.quotationNumber}
 • Date: ${quotation.date}
@@ -194,10 +234,35 @@ ${business.email ? `Email: ${business.email}` : ''}`;
     return { subject, body, email: quotation.customerSnapshot.email || '' };
   };
 
-  const handleShareGmailWeb = () => {
+  const handleShareGmailWeb = async () => {
     const { subject, body, email } = getEmailSubjectAndBody();
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+
+    // Automatically download the PDF so the user has the file immediately to attach
+    setIsSharingPdf(true);
+    setShareStatus('Preparing PDF for Gmail attachment...');
+    try {
+      await downloadQuotationPdf({
+        quotation,
+        elementId: 'quotation-document',
+      });
+
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+
+      setShareFeedback({
+        message: `📄 PDF (${quotation.quotationNumber}.pdf) downloaded to your computer! In Gmail, click 📎 (Attach files) to attach it.`,
+        type: 'info',
+      });
+    } catch (err: any) {
+      console.error(err);
+      setShareFeedback({
+        message: 'Could not generate PDF. Please try again.',
+        type: 'warning',
+      });
+    } finally {
+      setIsSharingPdf(false);
+      setShareStatus('');
+    }
   };
 
   const handleShareEmailClient = () => {
@@ -555,7 +620,7 @@ Subject to agreement and terms.`;
             <div className="mt-4 space-y-2.5">
               {/* 1. Primary: System Share Sheet with PDF Attached */}
               <button
-                onClick={handleSharePdf}
+                onClick={() => handleSharePdf()}
                 disabled={isSharingPdf || isGeneratingPdf}
                 className="w-full p-3 text-left rounded-xl border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 text-white transition-all shadow-sm flex items-center justify-between gap-3 cursor-pointer disabled:opacity-75 group"
               >
@@ -569,13 +634,13 @@ Subject to agreement and terms.`;
                   </div>
                   <div>
                     <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <span>Share PDF via Apps</span>
-                      <span className="text-[10px] font-normal text-neutral-300 bg-white/10 px-1.5 py-0.5 rounded">
-                        WhatsApp, Gmail, etc.
+                      <span>Share with WhatsApp / Apps</span>
+                      <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Paperclip className="w-3 h-3" /> PDF Attached
                       </span>
                     </div>
                     <p className="text-[11px] text-neutral-300 mt-0.5">
-                      {isSharingPdf ? (shareStatus || 'Preparing Quotation PDF...') : 'Opens system share sheet with PDF file attached'}
+                      {isSharingPdf ? (shareStatus || 'Preparing Quotation PDF...') : 'Opens system share sheet with PDF file & quotation message attached'}
                     </p>
                   </div>
                 </div>
@@ -587,7 +652,8 @@ Subject to agreement and terms.`;
                 {/* WhatsApp Direct */}
                 <button
                   onClick={handleShareWhatsApp}
-                  className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-left transition-colors flex items-center gap-2.5 cursor-pointer group"
+                  disabled={isSharingPdf || isGeneratingPdf}
+                  className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-left transition-colors flex items-center gap-2.5 cursor-pointer group disabled:opacity-60"
                 >
                   <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                     <MessageCircle className="w-4 h-4" />
@@ -595,10 +661,13 @@ Subject to agreement and terms.`;
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-emerald-950 flex items-center gap-1">
                       <span>WhatsApp</span>
+                      <span className="text-[9px] font-semibold bg-emerald-200 text-emerald-900 px-1 py-0.2 rounded">
+                        + PDF
+                      </span>
                       <Send className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     <p className="text-[10px] text-emerald-800 truncate">
-                      {quotation.customerSnapshot.phone ? `Send to ${quotation.customerSnapshot.phone}` : 'Open pre-filled chat'}
+                      {quotation.customerSnapshot.phone ? `Send to ${quotation.customerSnapshot.phone}` : 'Open chat with PDF attached'}
                     </p>
                   </div>
                 </button>
@@ -606,7 +675,8 @@ Subject to agreement and terms.`;
                 {/* Gmail Web Compose */}
                 <button
                   onClick={handleShareGmailWeb}
-                  className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 text-left transition-colors flex items-center gap-2.5 cursor-pointer group"
+                  disabled={isSharingPdf || isGeneratingPdf}
+                  className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 text-left transition-colors flex items-center gap-2.5 cursor-pointer group disabled:opacity-60"
                 >
                   <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                     <Mail className="w-4 h-4" />
@@ -614,10 +684,13 @@ Subject to agreement and terms.`;
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-rose-950 flex items-center gap-1">
                       <span>Gmail Web</span>
+                      <span className="text-[9px] font-semibold bg-rose-200 text-rose-900 px-1 py-0.2 rounded">
+                        + PDF
+                      </span>
                       <Send className="w-3 h-3 text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     <p className="text-[10px] text-rose-800 truncate">
-                      {quotation.customerSnapshot.email ? quotation.customerSnapshot.email : 'Open Gmail compose'}
+                      {quotation.customerSnapshot.email ? quotation.customerSnapshot.email : 'Open Gmail compose with PDF'}
                     </p>
                   </div>
                 </button>
