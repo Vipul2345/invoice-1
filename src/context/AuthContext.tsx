@@ -13,6 +13,7 @@ import { auth, db, googleProvider, handleFirestoreError, OperationType } from '.
 import { PlanTier, UserSubscription } from '../types';
 import { setPlanTier, setDrivePermission } from '../lib/storage';
 import { DEMO_PRO_CREDENTIALS } from '../lib/constants';
+import { performDailyCloudSync, CloudSyncResult } from '../lib/cloudSync';
 
 const getPlanDisplayName = (plan: PlanTier): string => {
   switch (plan) {
@@ -33,13 +34,14 @@ interface AuthContextType {
   subscription: UserSubscription | null;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, targetPlan?: PlanTier) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (targetPlan?: PlanTier) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   quickLoginAsPro: () => Promise<void>;
   updateSubscription: (plan: PlanTier, drivePermissionGranted?: boolean) => Promise<void>;
   grantDrivePermission: () => Promise<void>;
+  syncDailyCloudBackup: (force?: boolean) => Promise<CloudSyncResult | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -358,11 +360,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   };
 
-  const loginWithGoogle = async () => {
-    const cred = await signInWithPopup(auth, googleProvider);
-    if (cred.user) {
-      await fetchUserProfile(cred.user);
+  const loginWithGoogle = async (targetPlan?: PlanTier) => {
+    try {
+      const cred = await signInWithPopup(auth, googleProvider);
+      if (cred.user) {
+        const userRef = doc(db, 'users', cred.user.uid);
+        const snapshot = await getDoc(userRef);
+        if (!snapshot.exists()) {
+          // Register new user with Google (Gmail)
+          const planToSet = targetPlan || 'drive';
+          const sub: UserSubscription = {
+            plan: planToSet,
+            planName: getPlanDisplayName(planToSet),
+            status: 'active',
+            updatedAt: new Date().toISOString(),
+            drivePermissionGranted: planToSet === 'drive',
+            cloudBackupEnabled: planToSet === 'pro',
+          };
+          await setDoc(
+            userRef,
+            {
+              uid: cred.user.uid,
+              email: cred.user.email,
+              displayName: cred.user.displayName || cred.user.email?.split('@')[0] || '',
+              photoURL: cred.user.photoURL || '',
+              createdAt: new Date().toISOString(),
+              plan: planToSet,
+              subscription: sub,
+            },
+            { merge: true }
+          );
+          setUserPlan(planToSet);
+          setPlanTier(planToSet);
+          setSubscription(sub);
+          if (planToSet === 'drive') {
+            setDrivePermission(true);
+          }
+        } else {
+          await fetchUserProfile(cred.user);
+        }
+      }
+    } catch (err: any) {
+      console.error('Google Sign-in / Registration Error:', err);
+      throw err;
     }
+  };
+
+  const syncDailyCloudBackup = async (force = false): Promise<CloudSyncResult | null> => {
+    const user = auth.currentUser || currentUser;
+    if (!user) return null;
+    return performDailyCloudSync(user.uid, force);
   };
 
   const logout = async () => {
@@ -409,6 +456,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         quickLoginAsPro,
         updateSubscription,
         grantDrivePermission,
+        syncDailyCloudBackup,
       }}
     >
       {children}

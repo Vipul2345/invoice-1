@@ -19,6 +19,14 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function hasActiveCloudSubscription(userId) {
+      let userDoc = get(/databases/$(database)/documents/users/$(userId));
+      return userDoc != null &&
+        userDoc.data.subscription != null &&
+        userDoc.data.subscription.status == 'active' &&
+        (userDoc.data.subscription.plan == 'drive' || userDoc.data.subscription.plan == 'pro');
+    }
+
     // User profile document
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -26,7 +34,7 @@ service cloud.firestore {
       allow create, update: if isOwner(userId) && isValidId(userId);
       allow delete: if isOwner(userId);
 
-      // User scoped subcollections: businesses, customers, invoices, templates
+      // User scoped subcollections: businesses, customers, invoices, quotations, templates, cloudData
       match /businesses/{businessId} {
         allow read, write: if isOwner(userId) && isValidId(businessId);
       }
@@ -39,8 +47,18 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) && isValidId(invoiceId);
       }
 
+      match /quotations/{quotationId} {
+        allow read, write: if isOwner(userId) && isValidId(quotationId);
+      }
+
       match /templates/{templateId} {
         allow read, write: if isOwner(userId) && isValidId(templateId);
+      }
+
+      match /cloudData/{docId} {
+        allow read: if isOwner(userId) && isValidId(docId) && hasActiveCloudSubscription(userId);
+        allow create, update: if isOwner(userId) && isValidId(docId) && hasActiveCloudSubscription(userId);
+        allow delete: if isOwner(userId) && isValidId(docId);
       }
     }
   }

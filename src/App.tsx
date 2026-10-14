@@ -59,7 +59,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 
 export default function App() {
-  const { currentUser, updateSubscription } = useAuth();
+  const { currentUser, updateSubscription, syncDailyCloudBackup } = useAuth();
 
   // Navigation & View States
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
@@ -96,6 +96,34 @@ export default function App() {
     setSettings(getSettings());
     setTemplates(getAllTemplates());
   };
+
+  // Software Opening Hook: Check user ID & subscription in Firebase, perform everyday cloud sync if active
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let isMounted = true;
+    const executeDailyCloudSync = async () => {
+      try {
+        const result = await syncDailyCloudBackup(false);
+        if (result && !result.skipped && isMounted) {
+          showToast(`✓ Cloud Backup: ${result.message}`, 'success');
+          reloadData();
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        console.error('Firebase Cloud Sync on Software Startup:', err);
+        if (settings.plan === 'drive' || settings.plan === 'pro') {
+          showToast(`⚠️ Cloud Sync Blocked: ${err.message || 'Subscription check failed.'}`, 'error');
+        }
+      }
+    };
+
+    executeDailyCloudSync();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.uid, settings.plan]);
 
   useEffect(() => {
     const handleStorageChange = () => {

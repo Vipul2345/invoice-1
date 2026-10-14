@@ -24,6 +24,9 @@ import {
   ExternalLink,
   Clock,
   LogIn,
+  RefreshCw,
+  Database,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface DataAndBackupSectionProps {
@@ -43,13 +46,40 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
   onLearnMoreLegal,
   onRequestAuth,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, subscription, syncDailyCloudBackup } = useAuth();
   const [exportNotice, setExportNotice] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
   // Import preview modal state
   const [importCandidate, setImportCandidate] = useState<ExportDataPayload | null>(null);
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
+
+  const handleTestCloudSync = async () => {
+    if (!currentUser) {
+      showToast('Please sign in with Google (Gmail) or email first.', 'info');
+      onRequestAuth?.();
+      return;
+    }
+
+    setIsSyncingCloud(true);
+    setCloudSyncMessage(null);
+    try {
+      const res = await syncDailyCloudBackup(true);
+      if (res) {
+        const msg = `Synced successfully! Backed up ${res.invoiceCount} invoices and ${res.quotationCount} quotations to Firebase Cloud.`;
+        setCloudSyncMessage({ text: msg, error: false });
+        showToast(msg, 'success');
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || 'Cloud sync failed. Active subscription required.';
+      setCloudSyncMessage({ text: errMsg, error: true });
+      showToast(`Cloud Sync Blocked: ${errMsg}`, 'error');
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
 
   // Danger Zone Clear Data Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -299,6 +329,114 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
                   className="hidden"
                 />
               </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Firebase Cloud Synchronization & Server-side Daily Sync Section */}
+      <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Database className="w-5 h-5 text-indigo-600" />
+            <div>
+              <h3 className="text-sm font-bold text-neutral-900">
+                Firebase Cloud Sync & Daily Auto-Backup
+              </h3>
+              <p className="text-xs text-neutral-500">
+                Authoritative daily synchronization to Firestore, enforced strictly by database security rules.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            {!currentUser ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-md">
+                Not Signed In
+              </span>
+            ) : subscription?.status === 'active' && (subscription.plan === 'drive' || subscription.plan === 'pro') ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Sync
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-md">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Inactive / Free Tier
+              </span>
+            )}
+          </div>
+        </div>
+
+        {cloudSyncMessage && (
+          <div
+            className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 ${
+              cloudSyncMessage.error
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {cloudSyncMessage.error ? (
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            )}
+            <span>{cloudSyncMessage.text}</span>
+          </div>
+        )}
+
+        <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-neutral-700">
+            <div className="space-y-0.5">
+              <span className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider block">Connected Account</span>
+              <span className="font-bold text-neutral-900 truncate block">
+                {currentUser?.email || 'Offline Free User'}
+              </span>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider block">Firebase Subscription</span>
+              <span className="font-bold text-neutral-900 capitalize block">
+                {subscription ? `${subscription.plan} Plan (${subscription.status})` : 'No active cloud plan'}
+              </span>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider block">Last Synced to Cloud</span>
+              <span className="font-bold text-neutral-900 block">
+                {subscription?.lastCloudSyncAt ? new Date(subscription.lastCloudSyncAt).toLocaleDateString() + ' ' + new Date(subscription.lastCloudSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 pt-2 border-t border-neutral-200/80 text-[11px] text-neutral-600">
+            <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            <span>
+              <strong>Server-Side Subscription Validation:</strong> Whenever the application opens, your subscription is verified against Firebase Firestore. If active, records are synced once daily. Inactive subscriptions throw an error at the Firestore security rule level.
+            </span>
+          </div>
+
+          <div className="pt-2 border-t border-neutral-200 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-neutral-500">
+              {currentUser ? 'Daily sync triggers automatically on software opening.' : 'Sign in using your Gmail account to enable cloud sync.'}
+            </span>
+            <div className="flex items-center gap-2">
+              {!currentUser ? (
+                <button
+                  type="button"
+                  onClick={onRequestAuth}
+                  className="px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In with Google</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleTestCloudSync}
+                  disabled={isSyncingCloud}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingCloud ? 'Verifying & Syncing...' : 'Test Cloud Sync Now'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
