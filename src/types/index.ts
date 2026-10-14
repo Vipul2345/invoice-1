@@ -62,6 +62,7 @@ export interface BusinessProfile {
   phone: string;
   taxId: string; // GSTIN / EIN / VAT ID
   website?: string;
+  terms?: string;
   bankDetails: BankDetails;
 }
 
@@ -192,6 +193,7 @@ export interface UserSubscription {
   currentPeriodEnd?: string;
   autoRenew?: boolean;
   cancelledAt?: string;
+  lastCloudSyncAt?: string;
 }
 
 export interface DriveSyncState {

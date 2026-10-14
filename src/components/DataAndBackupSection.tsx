@@ -5,6 +5,7 @@ import {
   importBackupPayload,
   clearAllLocalData,
   mockTriggerDriveBackup,
+  getSettings,
 } from '../lib/storage';
 import { useAuth } from '../context/AuthContext';
 import { DrivePermissionModal } from './DrivePermissionModal';
@@ -83,7 +84,9 @@ export const DataAndBackupSection: React.FC<DataAndBackupSectionProps> = ({
     try {
       const res = await syncDailyCloudBackup(true);
       if (res) {
-        const msg = `Synced successfully! Backed up ${res.invoiceCount} invoices and ${res.quotationCount} quotations to Firebase Cloud.`;
+        const invCount = res.recordCounts?.invoices ?? 0;
+        const quoCount = res.recordCounts?.quotations ?? 0;
+        const msg = `Synced successfully! Backed up ${invCount} invoices and ${quoCount} quotations to Firebase Cloud.`;
         setCloudSyncMessage({ text: msg, error: false });
         showToast(msg, 'success');
       }

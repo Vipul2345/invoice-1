@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Quotation, InvoiceTemplate, PlanTier, BusinessProfile, QuotationStatus } from '../types';
 import { COUNTRIES } from '../lib/constants';
 import { formatCurrency } from '../lib/storage';
-import { downloadQuotationPdf } from '../lib/pdfGenerator';
+import { downloadQuotationPdf, shareQuotationPdf } from '../lib/pdfGenerator';
 import { calculateDocumentTotals } from '../lib/taxCalculations';
 import {
   Printer,
@@ -19,6 +19,11 @@ import {
   Check,
   FileCheck,
   XCircle,
+  MessageCircle,
+  Mail,
+  ExternalLink,
+  X,
+  Send,
 } from 'lucide-react';
 
 interface QuotationPreviewProps {
@@ -53,6 +58,9 @@ export const QuotationPreview: React.FC<QuotationPreviewProps> = ({
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [pdfStatus, setPdfStatus] = useState<string>('');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [isSharingPdf, setIsSharingPdf] = useState(false);
+  const [shareStatus, setShareStatus] = useState<string>('');
+  const [shareFeedback, setShareFeedback] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
 
   const countryConfig = COUNTRIES[quotation.country] || COUNTRIES.OTHER;
   const isIndia = quotation.country === 'IN';
@@ -85,6 +93,117 @@ export const QuotationPreview: React.FC<QuotationPreviewProps> = ({
       setIsGeneratingPdf(false);
       setPdfStatus('');
     }
+  };
+
+  const handleSharePdf = async () => {
+    if (isSharingPdf || isGeneratingPdf) return;
+    setIsSharingPdf(true);
+    setShareStatus('Preparing Quotation PDF...');
+    setShareFeedback(null);
+    try {
+      const result = await shareQuotationPdf({
+        quotation,
+        elementId: 'quotation-document',
+        onProgress: (status) => setShareStatus(status),
+      });
+
+      if (result.success) {
+        if (result.fallbackToDownload) {
+          setShareFeedback({
+            message: 'PDF downloaded! Since native app sharing is unavailable on this browser/OS, you can attach the file directly to WhatsApp or Gmail using the buttons below.',
+            type: 'info',
+          });
+        } else {
+          setShareFeedback({
+            message: 'Share sheet opened successfully!',
+            type: 'success',
+          });
+          setTimeout(() => setShareFeedback(null), 4000);
+        }
+      } else {
+        setShareFeedback({
+          message: result.error || 'Could not launch system share sheet. Please use the WhatsApp or Gmail buttons below.',
+          type: 'warning',
+        });
+      }
+    } catch (err: any) {
+      console.error('Quotation share error:', err);
+      setShareFeedback({
+        message: 'Failed to share quotation. Please try direct WhatsApp or Gmail below.',
+        type: 'warning',
+      });
+    } finally {
+      setIsSharingPdf(false);
+      setShareStatus('');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const customerName = quotation.customerSnapshot.name;
+    const companyName = quotation.customerSnapshot.company ? ` (${quotation.customerSnapshot.company})` : '';
+    const totalStr = formatCurrency(quotation.grandTotal, quotation.currency, quotation.currencySymbol);
+
+    const msg = `📋 *QUOTATION / ESTIMATE: ${quotation.quotationNumber}*
+From: ${business.name || 'InvoiceFlow'}
+To: ${customerName}${companyName}
+
+💰 *Quoted Total:* ${totalStr}
+📅 *Valid Until:* ${quotation.validUntil}
+📊 *Status:* ${quotation.status.toUpperCase()}
+
+Please find your quotation estimate above. Please let us know if you have any questions or when you would like to proceed. Thank you!`;
+
+    let rawPhone = (quotation.customerSnapshot.phone || '').replace(/[^0-9]/g, '');
+    if (rawPhone.length === 10 && quotation.country === 'IN') {
+      rawPhone = '91' + rawPhone;
+    }
+
+    const waUrl = rawPhone.length >= 10
+      ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const getEmailSubjectAndBody = () => {
+    const customerName = quotation.customerSnapshot.name;
+    const totalStr = formatCurrency(quotation.grandTotal, quotation.currency, quotation.currencySymbol);
+    const subject = `Quotation ${quotation.quotationNumber} from ${business.name || 'InvoiceFlow'}`;
+    const body = `Dear ${customerName},
+
+Please find our quotation / price estimate (${quotation.quotationNumber}) detailed below:
+
+• Quotation Number: ${quotation.quotationNumber}
+• Date: ${quotation.date}
+• Valid Until: ${quotation.validUntil}
+• Total Quoted Amount: ${totalStr}
+• Status: ${quotation.status.toUpperCase()}
+
+${quotation.paymentTerms ? `Payment Terms: ${quotation.paymentTerms}\n` : ''}${business.bankDetails?.bankName ? `Payment Details:
+Bank: ${business.bankDetails.bankName}
+Account Number: ${business.bankDetails.accountNumber || 'N/A'}
+IFSC / Routing: ${business.bankDetails.routingCode || 'N/A'}
+` : ''}
+We look forward to working with you. Please let us know if you would like to accept this quote or have any questions.
+
+Best regards,
+${business.name || 'InvoiceFlow'}
+${business.phone ? `Phone: ${business.phone}` : ''}
+${business.email ? `Email: ${business.email}` : ''}`;
+
+    return { subject, body, email: quotation.customerSnapshot.email || '' };
+  };
+
+  const handleShareGmailWeb = () => {
+    const { subject, body, email } = getEmailSubjectAndBody();
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShareEmailClient = () => {
+    const { subject, body, email } = getEmailSubjectAndBody();
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
   };
 
   const handlePrint = () => {
@@ -363,60 +482,195 @@ Subject to agreement and terms.`;
 
       {/* Share Modal */}
       {showShareModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 no-print">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200">
-            <h3 className="text-base font-bold text-neutral-900">Share Quotation</h3>
-            <p className="text-xs text-neutral-500 mt-1">
-              Download quotation PDF file or copy text summary.
-            </p>
-
-            <div className="mt-4 bg-neutral-50 p-3.5 rounded-xl border border-neutral-200 font-mono text-xs text-neutral-700 space-y-1.5">
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-sans">Document:</span>
-                <span className="font-bold">{quotation.quotationNumber}</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 no-print animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-neutral-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-neutral-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-neutral-900">Share Quotation</h3>
+                  <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    100% Free
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Share the quotation PDF directly to apps or send details to your client.
+                </p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-sans">Client:</span>
-                <span>{quotation.customerSnapshot.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-sans">Valid Until:</span>
-                <span>{quotation.validUntil}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-sans">Quoted Total:</span>
-                <span className="font-bold text-emerald-700">
-                  {formatCurrency(quotation.grandTotal, quotation.currency, quotation.currencySymbol)}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-2">
               <button
                 onClick={() => {
                   setShowShareModal(false);
-                  handleDownloadPdf();
+                  setShareFeedback(null);
                 }}
-                disabled={isGeneratingPdf}
-                className="w-full py-2.5 px-4 text-xs font-bold text-white bg-neutral-950 hover:bg-neutral-800 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                className="p-1.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
+                title="Close"
               >
-                <Download className="w-4 h-4" />
-                Download Quotation PDF
-              </button>
-
-              <button
-                onClick={handleCopySummary}
-                className="w-full py-2.5 px-4 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Summary Copied to Clipboard!' : 'Copy Text Summary'}
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-neutral-100 flex justify-end">
+            {/* Document Snapshot Card */}
+            <div className="mt-3.5 bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 text-xs text-neutral-700 space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-medium">Quotation:</span>
+                <span className="font-bold text-neutral-900">{quotation.quotationNumber}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-medium">Client:</span>
+                <span className="font-semibold text-neutral-800">{quotation.customerSnapshot.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-medium">Quoted Total:</span>
+                <span className="font-extrabold text-emerald-700">
+                  {formatCurrency(quotation.grandTotal, quotation.currency, quotation.currencySymbol)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[11px] text-neutral-500">
+                <span>Valid Until: {quotation.validUntil}</span>
+                {quotation.customerSnapshot.phone && <span>Tel: {quotation.customerSnapshot.phone}</span>}
+              </div>
+            </div>
+
+            {/* Status Feedback Notice (if any) */}
+            {shareFeedback && (
+              <div
+                className={`mt-3 p-2.5 rounded-xl text-xs flex items-start gap-2 border ${
+                  shareFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : shareFeedback.type === 'info'
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}
+              >
+                {shareFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                )}
+                <span>{shareFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Sharing Methods */}
+            <div className="mt-4 space-y-2.5">
+              {/* 1. Primary: System Share Sheet with PDF Attached */}
               <button
-                onClick={() => setShowShareModal(false)}
-                className="px-4 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900 cursor-pointer"
+                onClick={handleSharePdf}
+                disabled={isSharingPdf || isGeneratingPdf}
+                className="w-full p-3 text-left rounded-xl border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 text-white transition-all shadow-sm flex items-center justify-between gap-3 cursor-pointer disabled:opacity-75 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    {isSharingPdf ? (
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    ) : (
+                      <Share2 className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>Share PDF via Apps</span>
+                      <span className="text-[10px] font-normal text-neutral-300 bg-white/10 px-1.5 py-0.5 rounded">
+                        WhatsApp, Gmail, etc.
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-300 mt-0.5">
+                      {isSharingPdf ? (shareStatus || 'Preparing Quotation PDF...') : 'Opens system share sheet with PDF file attached'}
+                    </p>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-white shrink-0" />
+              </button>
+
+              {/* 2. Direct Messaging Options Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* WhatsApp Direct */}
+                <button
+                  onClick={handleShareWhatsApp}
+                  className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-left transition-colors flex items-center gap-2.5 cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-emerald-950 flex items-center gap-1">
+                      <span>WhatsApp</span>
+                      <Send className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <p className="text-[10px] text-emerald-800 truncate">
+                      {quotation.customerSnapshot.phone ? `Send to ${quotation.customerSnapshot.phone}` : 'Open pre-filled chat'}
+                    </p>
+                  </div>
+                </button>
+
+                {/* Gmail Web Compose */}
+                <button
+                  onClick={handleShareGmailWeb}
+                  className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 text-left transition-colors flex items-center gap-2.5 cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-rose-950 flex items-center gap-1">
+                      <span>Gmail Web</span>
+                      <Send className="w-3 h-3 text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <p className="text-[10px] text-rose-800 truncate">
+                      {quotation.customerSnapshot.email ? quotation.customerSnapshot.email : 'Open Gmail compose'}
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              {/* 3. Secondary Actions: Default Email App, Download PDF & Copy */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <button
+                  onClick={handleShareEmailClient}
+                  className="p-2 rounded-lg border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Open in your default mail application (Outlook, Apple Mail, etc.)"
+                >
+                  <Mail className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Default Mail</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowShareModal(false);
+                    handleDownloadPdf();
+                  }}
+                  disabled={isGeneratingPdf}
+                  className="p-2 rounded-lg border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  title="Direct download quotation PDF"
+                >
+                  <Download className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Download PDF</span>
+                </button>
+
+                <button
+                  onClick={handleCopySummary}
+                  className="p-2 rounded-lg border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Copy formatted quotation message summary to clipboard"
+                >
+                  {copied ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                  )}
+                  <span>{copied ? 'Copied!' : 'Copy Summary'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-400">
+              <span>🔒 100% Free · Direct from device</span>
+              <button
+                onClick={() => {
+                  setShowShareModal(false);
+                  setShareFeedback(null);
+                }}
+                className="px-3 py-1 text-xs font-medium text-neutral-600 hover:text-neutral-900 cursor-pointer"
               >
                 Close
               </button>
